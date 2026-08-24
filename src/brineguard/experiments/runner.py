@@ -69,7 +69,7 @@ def run(config_path: str | Path, run_id: str | None = None) -> Path:
         "optimized": (("hour", "receptor"), direct), "kernel_reconstruction": (("hour", "receptor"), reconstructed),
         "constant": (("hour", "receptor"), constant),
     }, coords={"hour": hours, "receptor": receptor_names}, attrs={"units": "kg m-3 salinity anomaly"})
-    salinity.to_zarr(run_dir / "receptor_salinity.zarr", mode="w")
+    salinity.to_zarr(run_dir / "receptor_salinity.zarr", mode="w", consolidated=False)
     domain = generate_domain(config)
     xr.Dataset({"maximum_anomaly": (("y", "x"), fields.max(axis=0)),
                 "cumulative_anomaly_hours": (("y", "x"), fields.sum(axis=0))}, coords=domain.coords,

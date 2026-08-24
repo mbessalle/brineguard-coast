@@ -8,7 +8,7 @@ import xarray as xr
 
 def comparison_figure(run_dir: Path) -> Path:
     schedule = pd.read_parquet(run_dir / "schedule.parquet")
-    salinity = xr.open_zarr(run_dir / "receptor_salinity.zarr")
+    salinity = xr.open_zarr(run_dir / "receptor_salinity.zarr", consolidated=False)
     fig, axes = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
     for name, group in schedule.groupby("plant"):
         axes[0].plot(group["hour"], group["production_m3_h"], marker="o", label=name)
