@@ -5,7 +5,17 @@ import numpy as np
 
 def advance(concentration: np.ndarray, wet: np.ndarray, *, dx: float, dy: float, depth: float,
             u: float, v: float, dispersion: float, dt: float) -> np.ndarray:
-    """One conservative finite-volume step with no-flux land/domain boundaries."""
+    """One conservative finite-volume step with no-flux land/domain boundaries.
+
+    `depth` is accepted but unused: this solves the depth-averaged equation
+    d(hc)/dt + div(huc) = div(hD grad c) only in the special case where h is
+    spatially and temporally uniform, so it cancels from every term. The h field
+    `domain.generate_domain` produces (which varies with column, per BUILD_PLAN
+    4.1's "variable depth") is therefore not actually applied to transport
+    anywhere in this solver — `simulate`/`validate_pulse` both use the single
+    scalar `dcfg["depth_m"]` for cell volume instead. Passing a spatially-varying
+    depth array here would silently give wrong results, not an error.
+    """
     c = np.where(wet, concentration, 0.0)
     fx = np.zeros((c.shape[0], c.shape[1] + 1))
     fy = np.zeros((c.shape[0] + 1, c.shape[1]))

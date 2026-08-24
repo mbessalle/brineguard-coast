@@ -5,7 +5,19 @@ from brineguard.transport.solver import simulate
 
 
 def build_kernel(config: dict) -> np.ndarray:
-    """Return H[receptor, source, arrival_hour, release_hour] per kg/s."""
+    """Return H[receptor, source, arrival_hour, release_hour] per kg/s.
+
+    Built from a single unit impulse per source at hour 0, then shifted in time
+    (kernel[:, :, arrival, release] = lag[arrival - release]). This is only exact
+    because the underlying `simulate`/`advance` transport is currently strictly
+    time-invariant: velocity, dispersion, depth and the wet mask are all fixed
+    scalars/fields for the whole horizon (see configs/first_slice.yaml). BUILD_PLAN
+    5.2 requires H to be indexed by both release and arrival time specifically
+    because forecast currents are meant to become nonstationary later; if/when the
+    solver gains time-varying forcing, this shift-based construction must be
+    replaced with one impulse simulation per release hour, or it will silently
+    reconstruct the wrong receptor response with no current test able to catch it.
+    """
     hours = config["dispatch"]["horizon_hours"]
     n_sources = len(config["domain"]["outfalls"])
     n_receptors = len(config["domain"]["receptors"])
