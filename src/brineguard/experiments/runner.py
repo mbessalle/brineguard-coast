@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import platform
+import subprocess
+import sys
+import time
+
+import numpy as np
+import pandas as pd
+import pyomo
+import scipy
+import xarray as xr
+import yaml
+
+from brineguard.config import load_config
+from brineguard.dispatch.model import load_factor_kg_s_per_m3_h, solve_dispatch
+from brineguard.domain import generate_domain
+from brineguard.reporting.plots import comparison_figure
+from brineguard.transport.kernels import build_kernel, reconstruct
+from brineguard.transport.solver import simulate
+from brineguard.transport.validation import validate_pulse
+
+
+def _json(path: Path, value: dict) -> None:
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def run(config_path: str | Path, run_id: str | None = None) -> Path:
+    started = time.monotonic()
+    config_path = Path(config_path).resolve()
+    config = load_config(config_path)
+    run_id = run_id or config["run"]["id"]
+    run_dir = Path(config["run"]["output_root"]) / run_id
+    if run_dir.exists():
+        raise FileExistsError(f"Run directory already exists: {run_dir}; choose --run-id")
+    (run_dir / "figures").mkdir(parents=True)
+    (run_dir / "config.resolved.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    validation = validate_pulse(config)
+    if not validation["mass_pass"] or not validation["analytical_pass"]:
+        raise RuntimeError(f"Transport validation failed: {validation}")
+    kernel = build_kernel(config)
+    solution = solve_dispatch(config, kernel)
+    direct, fields = simulate(config, solution["loads_kg_s"], record_full=True)
+    reconstructed = reconstruct(kernel, solution["loads_kg_s"])
+    replay_error = float(np.max(np.abs(direct - reconstructed)))
+    validation["kernel_replay_max_abs_error_kg_m3"] = replay_error
+    validation["kernel_replay_pass"] = replay_error <= config["validation"]["replay_absolute_tolerance_kg_m3"]
+    if not validation["kernel_replay_pass"]:
+        raise RuntimeError(f"Kernel replay validation failed: {replay_error}")
+    hours = np.arange(config["dispatch"]["horizon_hours"])
+    plant_names = [p["name"] for p in config["dispatch"]["plants"]]
+    schedule = pd.DataFrame([
+        {"hour": t, "plant": plant_names[i], "production_m3_h": solution["production_m3_h"][t, i],
+         "brine_load_kg_s": solution["loads_kg_s"][t, i]}
+        for t in hours for i in range(len(plant_names))
+    ])
+    schedule.to_parquet(run_dir / "schedule.parquet", index=False)
+    pd.DataFrame({"hour": hours, "storage_m3": solution["storage_m3"],
+                  "demand_m3_h": config["dispatch"]["demand_m3_h"]}).to_parquet(run_dir / "storage.parquet", index=False)
+    factors = np.array([load_factor_kg_s_per_m3_h(p) for p in config["dispatch"]["plants"]])
+    constant_prod = np.tile(np.mean(config["dispatch"]["demand_m3_h"]) / len(plant_names), (len(hours), len(plant_names)))
+    constant, _ = simulate(config, constant_prod * factors[None, :])
+    receptor_names = [r["name"] for r in config["domain"]["receptors"]]
+    salinity = xr.Dataset({
+        "optimized": (("hour", "receptor"), direct), "kernel_reconstruction": (("hour", "receptor"), reconstructed),
+        "constant": (("hour", "receptor"), constant),
+    }, coords={"hour": hours, "receptor": receptor_names}, attrs={"units": "kg m-3 salinity anomaly"})
+    salinity.to_zarr(run_dir / "receptor_salinity.zarr", mode="w")
+    domain = generate_domain(config)
+    xr.Dataset({"maximum_anomaly": (("y", "x"), fields.max(axis=0)),
+                "cumulative_anomaly_hours": (("y", "x"), fields.sum(axis=0))}, coords=domain.coords,
+               attrs={"provenance": "direct optimized-schedule transport replay"}).to_netcdf(run_dir / "spatial_summary.nc")
+    metrics = {
+        "objective": solution["objective"], "energy_cost": solution["energy_cost"],
+        "exposure_proxy_m2_kg_m3_h": solution["exposure_proxy"],
+        "maximum_receptor_anomaly_kg_m3": float(direct.max()),
+        "constant_maximum_receptor_anomaly_kg_m3": float(constant.max()),
+        "water_produced_m3": float(solution["production_m3_h"].sum()),
+        "demand_served_m3": float(sum(config["dispatch"]["demand_m3_h"])),
+    }
+    pd.DataFrame([{"metric": key, "value": value} for key, value in metrics.items()]).to_csv(run_dir / "metrics.csv", index=False)
+    _json(run_dir / "metrics.json", metrics)
+    _json(run_dir / "solver.json", {"solver": solution["solver"], "termination_condition": solution["termination_condition"]})
+    _json(run_dir / "validation.json", validation)
+    git_revision = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip() or "unknown"
+    config_sha = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    _json(run_dir / "inputs.json", {"config": str(config_path), "config_sha256": config_sha, "external_inputs": []})
+    _json(run_dir / "environment.json", {"python": sys.version, "platform": platform.platform(), "numpy": np.__version__,
+          "scipy": scipy.__version__, "xarray": xr.__version__, "pyomo": pyomo.__version__})
+    comparison_figure(run_dir)
+    (run_dir / "report.html").write_text(
+        "<!doctype html><meta charset='utf-8'><title>BrineGuard first slice</title>"
+        "<h1>BrineGuard Coast — offline first slice</h1><p>Synthetic screening fixture; not a calibrated plume forecast.</p>"
+        "<img src='figures/optimized_vs_constant.png' alt='optimized versus constant comparison'>",
+        encoding="utf-8")
+    _json(run_dir / "manifest.json", {"run_id": run_id, "created_utc": datetime.now(timezone.utc).isoformat(),
+          "git_revision": git_revision, "seed": config["run"]["seed"], "config_sha256": config_sha,
+          "duration_seconds": round(time.monotonic() - started, 3), "status": "complete"})
+    return run_dir

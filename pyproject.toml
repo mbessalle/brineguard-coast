@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brineguard"
+version = "0.1.0"
+description = "Offline architectural vertical slice for BrineGuard Coast"
+requires-python = ">=3.11"
+dependencies = [
+  "highspy>=1.11,<2",
+  "matplotlib>=3.9,<4",
+  "numpy>=2.0,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=17,<24",
+  "pyomo>=6.9,<7",
+  "PyYAML>=6,<7",
+  "scipy>=1.14,<2",
+  "xarray>=2024.7,<2027",
+  "zarr>=3.0,<4",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+brineguard = "brineguard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

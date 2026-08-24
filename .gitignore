@@ -3,3 +3,8 @@
 *.key
 .openclaw-workspace/
 __pycache__/
+.venv/
+.pytest_cache/
+*.egg-info/
+runs/*
+!runs/.gitkeep
