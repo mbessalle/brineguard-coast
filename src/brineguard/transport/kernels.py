@@ -1,35 +1,67 @@
 from __future__ import annotations
 
 import numpy as np
-from brineguard.transport.solver import simulate
+
+from brineguard.domain import generate_domain, receptor_cells, source_cells
+
+
+def _coast_face_x(wet_row: np.ndarray, dx: float) -> float:
+    first_wet = int(np.argmax(wet_row))
+    return (first_wet - 0.5) * dx
 
 
 def build_kernel(config: dict) -> np.ndarray:
     """Return H[receptor, source, arrival_hour, release_hour] per kg/s.
 
-    Built from a single unit impulse per source at hour 0, then shifted in time
-    (kernel[:, :, arrival, release] = lag[arrival - release]). This is only exact
-    because the underlying `simulate`/`advance` transport is currently strictly
-    time-invariant: velocity, dispersion, depth and the wet mask are all fixed
-    scalars/fields for the whole horizon (see configs/first_slice.yaml). BUILD_PLAN
-    5.2 requires H to be indexed by both release and arrival time specifically
-    because forecast currents are meant to become nonstationary later; if/when the
-    solver gains time-varying forcing, this shift-based construction must be
-    replaced with one impulse simulation per release hour, or it will silently
-    reconstruct the wrong receptor response with no current test able to catch it.
+    Semi-analytical source-receptor kernel (BUILD_PLAN 5.2): each hour of unit
+    release is a train of Gaussian puffs matching the cross-check solver's
+    injection cadence (one puff per transport substep), propagated exactly in
+    continuous space with the physical dispersion — no grid, so no numerical
+    diffusion. A single image source mirrored across the local coast face
+    approximates the no-flux shoreline; open boundaries are treated as
+    unbounded, which is valid while plumes stay far from the domain edge.
+
+    Entries are computed per (release, arrival) pair from the actual elapsed
+    times, not by shifting a single impulse response, so time-varying forcing
+    only requires `_displacement` to integrate the forecast current — the
+    kernel construction itself already supports nonstationarity.
+
+    Depth-uniformity assumption is shared with the solver: the 1/h factor uses
+    the scalar `depth_m`, not the spatially varying bathymetry field.
     """
+    dcfg = config["domain"]
     hours = config["dispatch"]["horizon_hours"]
-    n_sources = len(config["domain"]["outfalls"])
-    n_receptors = len(config["domain"]["receptors"])
-    lag = np.zeros((hours, n_sources, n_receptors))
-    for source in range(n_sources):
-        loads = np.zeros((hours, n_sources))
-        loads[0, source] = 1.0
-        lag[:, source, :], _ = simulate(config, loads)
-    kernel = np.zeros((n_receptors, n_sources, hours, hours))
-    for release in range(hours):
-        for arrival in range(release, hours):
-            kernel[:, :, arrival, release] = lag[arrival - release].T
+    dx, dy, depth = dcfg["dx_m"], dcfg["dy_m"], dcfg["depth_m"]
+    dispersion = dcfg["dispersion_m2_s"]
+    dt = dcfg["transport_dt_s"]
+    steps = round(3600 / dt)
+    u, v = dcfg["velocity_m_s"]
+    wet = generate_domain(config)["wet"].values
+    sources = source_cells(config)
+    receptors = receptor_cells(config)
+
+    def _displacement(ages_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        return u * ages_s, v * ages_s
+
+    kernel = np.zeros((len(receptors), len(sources), hours, hours))
+    puff_mass = 1.0 * dt
+    for s, (srow, scol) in enumerate(sources):
+        xs, ys = scol * dx, srow * dy
+        x_img = 2.0 * _coast_face_x(wet[srow], dx) - xs
+        for release in range(hours):
+            for arrival in range(release, hours):
+                lag = arrival - release
+                ages = (lag * steps + np.arange(1, steps + 1)) * dt
+                shift_x, shift_y = _displacement(ages)
+                denom = 4.0 * dispersion * ages
+                for r, (rrow, rcol) in enumerate(receptors):
+                    xr, yr = rcol * dx, rrow * dy
+                    r2 = (xr - xs - shift_x) ** 2 + (yr - ys - shift_y) ** 2
+                    r2_img = (xr - x_img - shift_x) ** 2 + (yr - ys - shift_y) ** 2
+                    peaks = puff_mass / (np.pi * denom * depth)
+                    kernel[r, s, arrival, release] = float(
+                        np.sum(peaks * (np.exp(-r2 / denom) + np.exp(-r2_img / denom)))
+                    )
     return kernel
 
 

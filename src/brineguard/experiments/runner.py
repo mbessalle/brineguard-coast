@@ -22,7 +22,7 @@ from brineguard.domain import generate_domain
 from brineguard.reporting.plots import comparison_figure
 from brineguard.transport.kernels import build_kernel, reconstruct
 from brineguard.transport.solver import simulate
-from brineguard.transport.validation import validate_pulse
+from brineguard.transport.validation import kernel_agreement, validate_transport
 
 
 def _json(path: Path, value: dict) -> None:
@@ -39,18 +39,19 @@ def run(config_path: str | Path, run_id: str | None = None) -> Path:
         raise FileExistsError(f"Run directory already exists: {run_dir}; choose --run-id")
     (run_dir / "figures").mkdir(parents=True)
     (run_dir / "config.resolved.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
-    validation = validate_pulse(config)
-    if not validation["mass_pass"] or not validation["analytical_pass"]:
+    validation = validate_transport(config)
+    if not validation["transport_pass"]:
         raise RuntimeError(f"Transport validation failed: {validation}")
     kernel = build_kernel(config)
     solution = solve_dispatch(config, kernel)
     direct, fields = simulate(config, solution["loads_kg_s"], record_full=True)
     reconstructed = reconstruct(kernel, solution["loads_kg_s"])
-    replay_error = float(np.max(np.abs(direct - reconstructed)))
-    validation["kernel_replay_max_abs_error_kg_m3"] = replay_error
-    validation["kernel_replay_pass"] = replay_error <= config["validation"]["replay_absolute_tolerance_kg_m3"]
-    if not validation["kernel_replay_pass"]:
-        raise RuntimeError(f"Kernel replay validation failed: {replay_error}")
+    replay = kernel_agreement(config, direct, reconstructed)
+    validation["schedule_replay"] = replay["kernel_agreement"]
+    validation["schedule_replay_pass"] = replay["kernel_agreement_pass"]
+    validation["schedule_replay_max_abs_error_kg_m3"] = float(np.max(np.abs(direct - reconstructed)))
+    if not validation["schedule_replay_pass"]:
+        raise RuntimeError(f"Optimized-schedule replay validation failed: {replay}")
     hours = np.arange(config["dispatch"]["horizon_hours"])
     plant_names = [p["name"] for p in config["dispatch"]["plants"]]
     schedule = pd.DataFrame([

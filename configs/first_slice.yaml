@@ -8,7 +8,10 @@ domain:
   dx_m: 500.0
   dy_m: 500.0
   depth_m: 10.0
-  coast_columns: 5
+  coast_width_m: 2500.0
+  coast_amplitude_m: 750.0
+  coast_wavelength_m: 3500.0
+  depth_slope_per_m: 0.00006
   velocity_m_s: [0.04, 0.0]
   dispersion_m2_s: 20.0
   transport_dt_s: 300.0
@@ -35,5 +38,9 @@ validation:
   pulse_mass_kg: 1000.0
   pulse_hours: 6
   mass_relative_tolerance: 0.000001
-  analytical_relative_l1_tolerance: 0.30
-  replay_absolute_tolerance_kg_m3: 0.0000000001
+  analytical_relative_l1_tolerance: 0.10
+  linearity_absolute_tolerance_kg_m3: 1.0e-15
+  boundary_mass_relative_tolerance: 1.0e-12
+  refinement_weighted_dose_relative_tolerance: 0.05
+  kernel_agreement_relative_tolerance: 0.08
+  kernel_agreement_threshold_fraction: 0.5
