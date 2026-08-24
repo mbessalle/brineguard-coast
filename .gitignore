@@ -2,3 +2,4 @@
 .env.*
 *.key
 .openclaw-workspace/
+__pycache__/
