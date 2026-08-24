@@ -5,9 +5,9 @@ synthetic screening and coordination proof, not a calibrated coastal-plume forec
 regulatory compliance.
 
 ```bash
-python3 -m venv .venv
+uv venv .venv   # or: python3 -m venv .venv -- fails on systems without python3-venv installed
 . .venv/bin/activate
-python -m pip install -e '.[test]'
+uv pip install -e '.[test]'   # or: python -m pip install -e '.[test]'
 python -m pytest
 python -m brineguard run-first-slice --config configs/first_slice.yaml
 ```
