@@ -83,7 +83,7 @@ def test_is_transient_error_other_exception_is_not_transient():
 def test_call_route_retries_once_on_transient(monkeypatch):
     calls = []
 
-    def fake_request(path, payload):
+    def fake_request(path, payload, timeout=120):
         calls.append(path)
         if len(calls) == 1:
             raise urllib.error.URLError("timed out")
@@ -102,7 +102,7 @@ def test_call_route_retries_once_on_transient(monkeypatch):
 def test_call_route_no_retry_on_non_transient(monkeypatch):
     calls = []
 
-    def fake_request(path, payload):
+    def fake_request(path, payload, timeout=120):
         calls.append(path)
         raise urllib.error.HTTPError("http://x", 400, "Bad Request", None, None)
 
