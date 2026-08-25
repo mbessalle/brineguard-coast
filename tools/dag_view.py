@@ -57,8 +57,14 @@ def build(out_path: Path) -> None:
         label = " ".join(t.get("spec", "").split())[:46].replace('"', "'")
         tid = t["id"].replace("task_", "T")
         lines.append(f'  {tid}["{tid}<br/>{label}…"]:::{cls}')
-        for dep in (t.get("deps") or []):
-            lines.append(f'  {dep.replace("task_", "T")} --> {tid}')
+        deps = t.get("deps") or []
+        if isinstance(deps, str):
+            try:
+                deps = json.loads(deps)
+            except ValueError:
+                deps = []
+        for dep in deps:
+            lines.append(f'  {str(dep).replace("task_", "T")} --> {tid}')
     if not tasks:
         lines.append('  idle["No orchestration tasks in the bound run"]:::pending')
     lines += [
