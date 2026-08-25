@@ -92,6 +92,11 @@ routes:
   documenter:           {backend: openrouter-api, model: openai/gpt-5-mini,
                          usd_per_m_in: 0.25, usd_per_m_out: 2.00,
                          role_prompt: adws/prompts/documenter.md}
+  # Lightweight C/D tier via OpenRouter (smoke-tested 2026-08-25; :free = $0):
+  lightweight:          {backend: openrouter-api, model: "nvidia/nemotron-3.5-lightning:free",
+                         usd_per_m_in: 0.0, usd_per_m_out: 0.0}
+  lightweight_qwen:     {backend: openrouter-api, model: qwen/qwen3-30b-a3b-instruct-2507,
+                         usd_per_m_in: 0.048, usd_per_m_out: 0.193}
 
 # ---------------------------------------------------------------------------
 # Model anonymization (system-orchestration.md §1). NEVER expose real model
@@ -110,12 +115,14 @@ anonymization:
     builder_escalation: Builder-2/Drift
     scout: Scout/Wisp
     documenter: Scribe/Quill
+    lightweight: Utility-1/Mote
+    lightweight_qwen: Utility-2/Grit
 
-# Lightweight local tier (C/D, system-orchestration.md §2): cheap sub-tasks,
-# syntax checks, single-file audits via local OSS models (Qwen, Nemotron).
-# NOT INSTALLED on this machine (no ollama/local runtime found 2026-08-25);
-# nearest live equivalent is routes.scout (deepseek-v4-flash). Add real local
-# routes here once a runtime exists, then verify with tools/probe.py.
+# Lightweight tier (C/D, system-orchestration.md §2): cheap sub-tasks, syntax
+# checks, single-file audits. Filled via OpenRouter instead of local models —
+# routes.lightweight (nemotron :free tier, $0) and routes.lightweight_qwen —
+# both smoke-tested 2026-08-25. A local runtime (ollama) remains an option if
+# offline/zero-latency utility calls are ever needed.
 
 # ---------------------------------------------------------------------------
 # Routing policy
