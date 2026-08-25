@@ -61,6 +61,19 @@ tiers:
 # before trusting numbers. Keys: gitignored .env (OPENROUTER_API_KEY),
 # .env.gemini_key; codex uses its own auth.
 # ---------------------------------------------------------------------------
+# Model-selection policy (mandatory for any route change):
+# 1. FRESHNESS: tools/model_freshness.py diffs pinned routes vs the live
+#    catalog at every session start (via session_brief); flagged families get
+#    a neutral web search ("latest model by <company>") + smoke test.
+# 2. ALLOCATION CRITERIA — every route must be justified by all three, with
+#    evidence recorded next to the route:
+#    - size/proficiency: published benchmark standing for the ROLE's task class
+#      (coding for builders, reasoning for reviewers, none needed for utility)
+#    - cost: usd_per_m in/out (subscription routes = 0 marginal, prefer them)
+#    - fit: output discipline (e.g. reasoning-leak models rejected for terse
+#      utility roles), context length, agentic-harness support
+# 3. Higher-proficiency-at-equal-cost wins; equal-proficiency-at-lower-cost
+#    wins; user-pinned routes (builder=deepseek-v4-pro) change only by user.
 backends:
   session:        # the orchestrating Claude Code session itself (Tier 1)
     invoke: interactive
