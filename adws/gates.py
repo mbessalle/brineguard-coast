@@ -244,6 +244,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_quality = sub.add_parser("quality", help="Run pytest + ruff/mypy (if installed).")
     p_quality.add_argument("--python", default=None, help="Path to python interpreter (default: .venv/bin/python)")
+    p_quality.add_argument("--cwd", default=None,
+                           help="Directory to run checks in (default: repo root). "
+                                "Pass the worker's worktree so gates test what the worker built.")
 
     args = parser.parse_args(argv)
 
@@ -254,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "json":
         result = json_parse(args.path)
     elif args.command == "quality":
-        result = code_quality(python=args.python)
+        result = code_quality(python=args.python, cwd=args.cwd)
     else:  # pragma: no cover - argparse guards this
         parser.error(f"unknown command {args.command!r}")
         return 2

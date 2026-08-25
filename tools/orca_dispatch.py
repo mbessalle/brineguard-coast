@@ -142,7 +142,7 @@ def _pi_launch_cmd(model: str, role_prompt_path: str, provider: str = "openroute
     key_export = (
         "OPENROUTER_API_KEY=\"$(python3 - <<'PYEOF'\n"
         "import sys\n"
-        "sys.path.insert(0, 'tools')\n"
+        f"sys.path.insert(0, {str(REPO_ROOT / 'tools')!r})\n"
         "from openrouter_call import load_key\n"
         "print(load_key())\n"
         "PYEOF\n"
@@ -153,10 +153,12 @@ def _pi_launch_cmd(model: str, role_prompt_path: str, provider: str = "openroute
     pi_argv = ["pi", "--provider", provider, "--model", model]
     if role_prompt_path:
         pi_argv += ["--append-system-prompt", role_prompt_path]
+    # No cd: the terminal starts in its ASSIGNED worktree (audit F1 —
+    # forcing REPO_ROOT made workers edit the primary checkout even when
+    # Orca assigned an isolated worktree). Key loading uses absolute paths.
     script = (
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
-        f"cd {shlex.quote(str(REPO_ROOT))}\n"
         f"{key_export}"
         "rm -f -- \"$0\"\n"          # self-clean; bash keeps the open fd
         f"exec {shlex.join(pi_argv)}\n"
