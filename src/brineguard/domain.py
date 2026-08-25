@@ -5,6 +5,9 @@ import xarray as xr
 
 
 def generate_domain(config: dict) -> xr.Dataset:
+    if config["domain"].get("source") == "gebco":
+        from brineguard.domain_sourced import build_hybrid_domain
+        return build_hybrid_domain(config)
     cfg = config["domain"]
     ny, nx = cfg["ny"], cfg["nx"]
     dx, dy = cfg["dx_m"], cfg["dy_m"]

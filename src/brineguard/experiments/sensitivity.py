@@ -9,13 +9,18 @@ integration owns plotting; these functions return tidy records only.
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 
+from brineguard.config import load_config
 from brineguard.dispatch.model import solve_dispatch
+from brineguard.reporting.plots import pareto_frontier_figure, sensitivity_benefit_figure
 from brineguard.transport.kernels import load_or_build_kernel
 
 from brineguard.experiments.benchmark import (
+    _json,
     _sha256,
     _strategy_b,
     _strategy_c,
@@ -126,3 +131,47 @@ def sensitivity_sweep(config: dict, kernel_builder=load_or_build_kernel, *,
                                     _dispersion_config(config, factor),
                                     cache_dir, kernel_builder))
     return records
+
+
+def run_sensitivity(config_path: str | Path, run_id: str | None, *,
+                    n_points: int = 8, output_root: str = "runs") -> Path:
+    """CLI integration: Pareto frontier + sensitivity sweep -> JSON + figures.
+
+    Writes ``sensitivity.json``, ``figures/pareto_frontier.png``,
+    ``figures/sensitivity_benefit.png``, and a ``manifest.json`` mirroring the
+    benchmark harness.
+    """
+    config_path = Path(config_path).resolve()
+    config = load_config(config_path)
+    run_id = run_id or config["run"]["id"]
+    output_dir = Path(output_root) / run_id
+    output_dir.mkdir(parents=True)
+    (output_dir / "figures").mkdir()
+
+    kernel, _ = load_or_build_kernel(config, config["run"]["kernel_cache_dir"])
+    frontier = pareto_frontier(config, kernel, n_points=n_points)
+    sweep = sensitivity_sweep(config)
+
+    _json(output_dir / "sensitivity.json", {
+        "config": str(config_path),
+        "config_sha256": _sha256(config),
+        "run_id": run_id,
+        "pareto_frontier": frontier,
+        "sensitivity_sweep": sweep,
+    })
+
+    pareto_frontier_figure(output_dir)
+    sensitivity_benefit_figure(output_dir)
+
+    import subprocess
+    git_revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    ).stdout.strip() or "unknown"
+    _json(output_dir / "manifest.json", {
+        "run_id": run_id,
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "git_revision": git_revision,
+        "config": str(config_path),
+        "config_sha256": _sha256(config),
+    })
+    return output_dir

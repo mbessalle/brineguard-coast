@@ -119,6 +119,26 @@ def _pearson_correlation(a: np.ndarray, b: np.ndarray) -> float:
     return r
 
 
+def _between_plant_sync(loads_kg_s: np.ndarray) -> float:
+    """Mean pairwise Pearson correlation between distinct plants' hourly loads.
+
+    Measures how strongly different plants' brine release schedules move
+    together within a single strategy (between-plant synchronization).
+    """
+    n = loads_kg_s.shape[1]
+    if n < 2:
+        return 0.0
+    rs: list[float] = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = loads_kg_s[:, i], loads_kg_s[:, j]
+            a_demean, b_demean = a - a.mean(), b - b.mean()
+            num = float((a_demean * b_demean).sum())
+            den = float(np.sqrt((a_demean ** 2).sum() * (b_demean ** 2).sum()))
+            rs.append(num / den if den > 0 else 0.0)
+    return float(np.mean(rs))
+
+
 def _single_source_exposure(config: dict, loads_kg_s: np.ndarray,
                             source_idx: int) -> float:
     """Exposure from a single source simulated in isolation."""
@@ -144,6 +164,8 @@ def _coincidental_dumping(config: dict, b_loads: np.ndarray, c_loads: np.ndarray
 
     metrics: dict = {
         "pearson_r": {f"plant_{i}": float(corr[i]) for i in range(n_sources)},
+        "between_plant_sync_B": _between_plant_sync(b_loads),
+        "between_plant_sync_C": _between_plant_sync(c_loads),
         "overlap_contribution_B_m2_kg_m3_h": float(overlap_b),
         "overlap_contribution_C_m2_kg_m3_h": float(overlap_c),
         "single_source_exposures_B": [float(v) for v in single_exps],

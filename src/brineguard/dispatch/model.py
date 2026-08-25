@@ -3,6 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pyomo.environ as pyo
 
+# Constant scaling of the LP objective improves HiGHS numerical conditioning
+# (the exposure term reaches ~1e9); argmin is invariant under positive scaling,
+# so reported metrics stay on the raw expression scale.
+OBJECTIVE_SCALE: float = 1e-6
+
 
 def load_factor_kg_s_per_m3_h(plant: dict) -> float:
     brine_m3_per_m3 = (1.0 - plant["recovery"]) / plant["recovery"]
@@ -56,7 +61,7 @@ def solve_dispatch(config: dict, kernel: np.ndarray, cost_cap: float | None = No
         m.cost_cap = pyo.Constraint(expr=energy_expr <= cost_cap)
     ramp_cost = cfg["ramp_weight"] * sum(m.ramp[i, t] for i in range(n_i) for t in range(n_t))
     exposure = sum(receptors[r]["area_m2"] * m.exceedance[r, t] for r in range(n_r) for t in range(n_t))
-    m.objective = pyo.Objective(expr=energy_expr + ramp_cost + cfg["exposure_weight"] * exposure)
+    m.objective = pyo.Objective(expr=OBJECTIVE_SCALE * (energy_expr + ramp_cost + cfg["exposure_weight"] * exposure))
     result = pyo.SolverFactory("appsi_highs").solve(m)
     if result.solver.termination_condition != pyo.TerminationCondition.optimal:
         raise RuntimeError(f"HiGHS did not find an optimum: {result.solver.termination_condition}")
@@ -65,7 +70,7 @@ def solve_dispatch(config: dict, kernel: np.ndarray, cost_cap: float | None = No
     return {
         "production_m3_h": production, "storage_m3": storage,
         "loads_kg_s": production * factors[None, :],
-        "objective": float(pyo.value(m.objective)),
+        "objective": float(pyo.value(m.objective)) / OBJECTIVE_SCALE,
         "energy_cost": float(pyo.value(energy_expr)), "ramp_cost": float(pyo.value(ramp_cost)),
         "exposure_proxy": float(pyo.value(exposure)),
         "termination_condition": str(result.solver.termination_condition), "solver": "HiGHS via Pyomo appsi",

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 
+from brineguard.config import load_config
 from brineguard.dispatch.model import constant_schedule, solve_dispatch
 from brineguard.dispatch.independent import solve_independent
+from brineguard.experiments.benchmark import _json, _sha256
+from brineguard.reporting.plots import uncertainty_intervals_figure
 from brineguard.transport.kernels import build_kernel
 from brineguard.transport.solver import simulate
 
@@ -182,3 +187,60 @@ def evaluate_common_schedules(config: dict, n_members: int, seed: int,
         result["strategies"][rule]["benefit_nominal"] = float(benefit[0])
         result["strategies"][rule]["benefit_held_out"] = _held_out_stats(benefit)
     return result
+
+
+def run_ensemble(config_path: str | Path, run_id: str | None, *,
+                 n_members: int = 20, seed: int | None = None,
+                 output_root: str = "runs") -> Path:
+    """CLI integration: evaluate common schedules and write ensemble artifacts.
+
+    Writes ``ensemble.json`` (per-strategy held-out stats, per-member exposures,
+    benefit distributions, and member metadata), ``figures/uncertainty_intervals.png``,
+    and a ``manifest.json`` mirroring the benchmark harness.
+    """
+    config_path = Path(config_path).resolve()
+    config = load_config(config_path)
+    run_id = run_id or config["run"]["id"]
+    seed = config["run"]["seed"] if seed is None else seed
+    output_dir = Path(output_root) / run_id
+    output_dir.mkdir(parents=True)
+    (output_dir / "figures").mkdir()
+
+    result = evaluate_common_schedules(config, n_members=n_members, seed=seed)
+
+    strategies: dict = {}
+    for strategy, entry in result["strategies"].items():
+        s = {
+            "exposure_per_member": entry["exposure_per_member"],
+            "held_out": entry["held_out"],
+        }
+        if "benefit_distribution" in entry:
+            s["benefit_distribution"] = entry["benefit_distribution"]
+            s["benefit_nominal"] = entry["benefit_nominal"]
+            s["benefit_held_out"] = entry["benefit_held_out"]
+        strategies[strategy] = s
+
+    _json(output_dir / "ensemble.json", {
+        "config": str(config_path),
+        "config_sha256": _sha256(config),
+        "run_id": run_id,
+        "n_members": n_members,
+        "seed": seed,
+        "strategies": strategies,
+        "member_metadata": [m["metadata"] for m in result["members"]],
+    })
+
+    uncertainty_intervals_figure(output_dir)
+
+    import subprocess
+    git_revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    ).stdout.strip() or "unknown"
+    _json(output_dir / "manifest.json", {
+        "run_id": run_id,
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "git_revision": git_revision,
+        "config": str(config_path),
+        "config_sha256": _sha256(config),
+    })
+    return output_dir
