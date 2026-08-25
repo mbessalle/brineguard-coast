@@ -174,6 +174,13 @@ AGENTS: dict[str, dict] = {
     "claude": {
         "description": "Claude Code worker via orchestration worker-start",
         "worker_start": True,
+        "orca_agent": "claude",
+        "default_model": "claude-fable-5",  # omit --model when route matches
+    },
+    "codex": {
+        "description": "codex CLI worker via orchestration worker-start (only route to gpt-5.6-sol; server-side model validation)",
+        "worker_start": True,
+        "orca_agent": "codex",
     },
     "pi-openrouter": {
         "description": "pi with OpenRouter (two-step: terminal create + dispatch --inject)",
@@ -189,6 +196,7 @@ AGENTS: dict[str, dict] = {
 
 BACKEND_TO_AGENT = {
     "claude-cli": "claude",
+    "codex-cli": "codex",
     "pi-openrouter": "pi-openrouter",
     "pi-openai-codex": "pi-openai-codex",
 }
@@ -344,8 +352,8 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if agent.get("worker_start"):
         ws = ["orchestration", "worker-start", "--task", task_id,
-              "--worktree", "current", "--agent", "claude"]
-        if model and model != "claude-fable-5":
+              "--worktree", "current", "--agent", agent["orca_agent"]]
+        if model and model != agent.get("default_model"):
             ws += ["--model", model]
         r = _orca(ws, dry_run=args.dry_run, json_output=not args.dry_run)
         if not args.dry_run:

@@ -29,10 +29,11 @@ from openrouter_call import request  # noqa: E402
 
 CONFIG = Path(__file__).parent.parent / "sssf.config.yaml"
 _DEFAULT_ROUTES = ["builder", "scout", "reviewer_independent", "documenter"]
-_SKIP_BACKENDS = {"session", "codex-cli"}
-# pi-openai-codex is called one-shot with --no-tools (read-only guarantee holds)
-_READ_ONLY_BACKENDS = {"openrouter-api", "pi-openrouter", "pi-openai-codex"}
+_SKIP_BACKENDS = {"session"}
+# pi-openai-codex: one-shot with --no-tools; codex-cli: exec --sandbox read-only
+_READ_ONLY_BACKENDS = {"openrouter-api", "pi-openrouter", "pi-openai-codex", "codex-cli"}
 _PI_ONESHOT_BACKENDS = {"pi-openai-codex"}
+_CODEX_ONESHOT_BACKENDS = {"codex-cli"}
 
 # ---- helpers ----------------------------------------------------------------
 
@@ -116,9 +117,38 @@ def _call_pi_oneshot(target: dict, prompt: str, system: str | None,
             "actual_model": model}
 
 
+def _call_codex_oneshot(target: dict, prompt: str, system: str | None,
+                        timeout: int) -> dict:
+    """One-shot via codex CLI in read-only sandbox (only route to gpt-5.6-sol;
+    server-validates model ids with a hard 400, no silent fallback)."""
+    import subprocess
+    model = target["model"]
+    full_prompt = (f"{system}\n\n{prompt}" if system else prompt)
+    start = time.monotonic()
+    argv = ["codex", "exec", "--sandbox", "read-only", "-m", model, full_prompt]
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        if proc.returncode != 0 or '"type":"error"' in proc.stdout:
+            raise RuntimeError(f"codex exit {proc.returncode}: "
+                               f"{(proc.stdout + proc.stderr)[-200:]}")
+        text = proc.stdout.strip()
+    except Exception as exc:
+        return {"status": "FAIL", "latency": round(time.monotonic() - start, 1),
+                "error": str(exc)[:200], "text": "", "est_cost": 0,
+                "prompt_chars": len(full_prompt), "response_chars": 0,
+                "actual_model": model}
+    return {"status": "PASS", "text": text,
+            "latency": round(time.monotonic() - start, 1),
+            "est_cost": 0.0,  # subscription: no marginal cost
+            "prompt_chars": len(full_prompt), "response_chars": len(text),
+            "actual_model": model}
+
+
 def _call_route(target: dict, prompt: str, system: str | None,
                 timeout: int = 180) -> dict:
-    """Call one route (OpenRouter chat API, or pi one-shot). Returns result dict."""
+    """Call one route (OpenRouter chat API, pi or codex one-shot)."""
+    if target["config"].get("backend") in _CODEX_ONESHOT_BACKENDS:
+        return _call_codex_oneshot(target, prompt, system, timeout)
     if target["config"].get("backend") in _PI_ONESHOT_BACKENDS:
         return _call_pi_oneshot(target, prompt, system, timeout)
     model = target["model"]

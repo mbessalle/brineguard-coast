@@ -81,9 +81,15 @@ backends:
     invoke: [claude, -p, "{prompt}", --model, "{model}", --output-format, text]
   pi-openai-codex:  # full agentic coder on the OpenAI ChatGPT subscription
     # OAuth tokens in ~/.pi/agent/auth.json (pi /login, provider openai-codex);
-    # $0 marginal cost. Replaces the retired codex-cli backend (user decision).
+    # $0 marginal cost. CATALOG CEILING: pi 0.73.1 tops out at gpt-5.5 and
+    # SILENTLY falls back on unknown models (caught live 2026-08-26; blocked
+    # by tools/model_preflight.py). GPT-5.6 family is NOT reachable here.
     invoke: [pi, --provider, openai-codex, --model, "{model}", -p, --no-session,
              --append-system-prompt, "{role_prompt}", "{prompt}"]
+  codex-cli:  # READMITTED for review roles only (user decision 2026-08-26):
+    # the only route to gpt-5.6-sol on the subscription. Validates models
+    # server-side with a hard 400 on unknown ids (verified: no silent fallback).
+    invoke: [codex, exec, -m, "{model}", "{prompt}"]
   pi-openrouter:  # full agentic coder: read/bash/edit/write tools
     invoke: [pi, --provider, openrouter, --model, "{model}", -p, --no-session,
              --append-system-prompt, "{role_prompt}", "{prompt}"]
@@ -96,8 +102,8 @@ routes:
   reviewer:             {backend: session,        model: claude-fable-5}
   # Default independent reviewer: SOTA-tier on the OpenAI subscription via pi
   # ($0 marginal). kimi kept for /fh-debate diversity.
-  reviewer_independent: {backend: pi-openai-codex, model: gpt-5.6-sol,
-                         role_prompt: adws/prompts/reviewer.md}
+  reviewer_independent: {backend: codex-cli, model: gpt-5.6-sol,
+                         role_prompt: adws/prompts/reviewer.md}  # real 5.6-sol, verified 2026-08-26
   reviewer_kimi:        {backend: openrouter-api, model: moonshotai/kimi-k3,
                          usd_per_m_in: 3.00, usd_per_m_out: 15.00,
                          role_prompt: agent-system-prompt.md}  # SOTA comms contract as system prompt
@@ -108,7 +114,7 @@ routes:
   builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
                          usd_per_m_in: 0.52, usd_per_m_out: 1.04,
                          role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)
-  builder_escalation:   {backend: pi-openai-codex, model: gpt-5.6-sol,
+  builder_escalation:   {backend: codex-cli, model: gpt-5.6-sol,
                          role_prompt: adws/prompts/builder.md}   # subscription, no per-token cost
   scout:                {backend: pi-openrouter,  model: deepseek/deepseek-v4-flash,
                          usd_per_m_in: 0.056, usd_per_m_out: 0.11,
