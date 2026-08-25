@@ -23,8 +23,12 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-AC_IDS = [f"AC{i}" for i in range(1, 9)]
 CLAIM_IDS = [f"C{i}" for i in range(1, 7)]
+
+
+def _ac_ids(man) -> list[str]:
+    """Acceptance-criteria ids for this run (manifest-driven; default AC1..AC8)."""
+    return man.get("ac_ids") or [f"AC{i}" for i in range(1, 9)]
 
 
 def _sha(p: Path) -> str:
@@ -52,7 +56,7 @@ def _ledger_rows() -> list[dict]:
 def chk_plan(man):
     p = REPO / man["plan_path"]
     txt = p.read_text() if p.is_file() else ""
-    missing = [a for a in AC_IDS if a not in txt]
+    missing = [a for a in _ac_ids(man) if a not in txt]
     ok = p.is_file() and p.stat().st_size > 500 and not missing
     return ok, (f"{p} sha256={_sha(p)[:12]}, all AC ids present" if ok
                 else f"{p} missing/thin or lacks ACs {missing}")
@@ -60,7 +64,7 @@ def chk_plan(man):
 
 def chk_spec_fidelity(man):
     spec = Path(man["spec_path"]).read_text()
-    missing = [a for a in AC_IDS if a not in spec]
+    missing = [a for a in _ac_ids(man) if a not in spec]
     ok = not missing and _sha(Path(man["spec_path"])) == man["spec_sha256"]
     return ok, ("all AC ids present, spec hash matches manifest" if ok
                 else f"missing ACs {missing} or hash mismatch")
@@ -102,11 +106,12 @@ def chk_prompt_delivered(man):
     d = _orca_json(["orchestration", "task-list"])
     spec = next((t.get("spec", "") for t in (d.get("result") or {}).get("tasks", [])
                  if t.get("id") == man["task_id"]), "")
-    found = [a for a in AC_IDS if a in spec]
+    acs = _ac_ids(man)
+    found = [a for a in acs if a in spec]
     spec_hash = hashlib.sha256(spec.encode()).hexdigest()
-    ok = len(found) == len(AC_IDS) and spec_hash == man["spec_sha256"]
-    return ok, (f"orca-stored spec byte-identical to hashed spec file, all {len(AC_IDS)} AC ids"
-                if ok else f"ACs found {len(found)}/8, orca-spec hash {'==' if spec_hash==man['spec_sha256'] else '!='} manifest")
+    ok = len(found) == len(acs) and spec_hash == man["spec_sha256"]
+    return ok, (f"orca-stored spec byte-identical to hashed spec file, all {len(acs)} AC ids"
+                if ok else f"ACs found {len(found)}/{len(acs)}, orca-spec hash {'==' if spec_hash==man['spec_sha256'] else '!='} manifest")
 
 
 def chk_worker_done(man):
@@ -124,14 +129,18 @@ def chk_envelope(man):
 
 
 def chk_files(man):
-    req = ["app/missioncontrol/server.py", "app/missioncontrol/index.html",
-           "tests/test_missioncontrol.py"]
+    req = man.get("required_files") or ["app/missioncontrol/server.py",
+                                        "app/missioncontrol/index.html",
+                                        "tests/test_missioncontrol.py"]
     missing = [f for f in req if not (REPO / f).is_file()]
     return not missing, ("all deliverable files present" if not missing else f"missing {missing}")
 
 
 def chk_stdlib_only(man):
-    src = (REPO / "app/missioncontrol/server.py").read_text()
+    entry = man.get("server_entry")
+    if entry is None:
+        return True, "SKIPPED loudly: no server_entry declared for this run"
+    src = (REPO / entry).read_text()
     import sys as _s
     bad = []
     for m in re.finditer(r"^\s*import\s+(.+)|^\s*from\s+([a-zA-Z_][a-zA-Z0-9_.]*)", src, re.M):
@@ -154,9 +163,11 @@ def chk_tests(man):
 
 
 def chk_server(man):
+    if man.get("server_entry") is None:
+        return True, "SKIPPED loudly: no server_entry declared for this run"
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
-    proc = subprocess.Popen([sys.executable, "app/missioncontrol/server.py",
+    proc = subprocess.Popen([sys.executable, man["server_entry"],
                              "--port", str(port)], cwd=REPO,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -196,6 +207,8 @@ def chk_duration(man):
 
 
 def chk_cost(man):
+    if "usage_before_usd" not in man:
+        return True, "SKIPPED loudly: no usage baseline recorded at dispatch time"
     sys.path.insert(0, str(REPO / "tools"))
     from openrouter_call import load_key
     req = urllib.request.Request("https://openrouter.ai/api/v1/auth/key",
@@ -210,8 +223,29 @@ CHECKS_STAGE1 = [
     ("ledger_entry", chk_ledger), ("orca_provenance", chk_orca_provenance),
     ("model_preflight", chk_model_preflight), ("prompt_delivered", chk_prompt_delivered),
 ]
+def chk_diff_claims(man):
+    if "git_base" not in man:
+        return True, "SKIPPED loudly: no git_base recorded at dispatch time"
+    sys.path.insert(0, str(REPO / "adws"))
+    import gates
+    r = gates.diff_matches_claims(man.get("envelope_path",
+                                          "adw_data/missioncontrol/envelope.json"),
+                                  base=man["git_base"])
+    return r["pass"], str(r["detail"])[:200]
+
+
+def chk_protected(man):
+    if "git_base" not in man:
+        return True, "SKIPPED loudly: no git_base recorded at dispatch time"
+    sys.path.insert(0, str(REPO / "adws"))
+    import gates
+    r = gates.protected_paths_untouched(base=man["git_base"])
+    return r["pass"], str(r["detail"])[:200]
+
+
 CHECKS_STAGE2 = [
     ("worker_done", chk_worker_done), ("envelope_gate", chk_envelope),
+    ("diff_matches_claims", chk_diff_claims), ("protected_paths", chk_protected),
     ("deliverable_files", chk_files), ("stdlib_only", chk_stdlib_only),
     ("tests_green", chk_tests), ("live_server", chk_server),
     ("duration_budget", chk_duration), ("token_cost", chk_cost),

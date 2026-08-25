@@ -10,6 +10,20 @@
 
 version: 1
 
+# Paths no worker diff may touch (enforced by adws/gates.py
+# protected_paths_untouched — "agents must not edit the machinery that grades
+# them", SSSF pattern). The orchestrator edits these only deliberately.
+protected_files:
+  - adws/gates.py
+  - tools/pipeline_verify.py
+  - tools/model_preflight.py
+  - sssf.config.yaml
+  - FREEZE.md
+  - docs/CLAIMS.md
+  - runs/
+  - evidence/
+  - adw_data/dispatch_ledger.jsonl
+
 tiers:
   tier_1_sota:
     description: >

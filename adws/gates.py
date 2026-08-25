@@ -114,6 +114,75 @@ def json_parse(path: str) -> dict:
     return {"gate": "json_parse", "pass": True, "detail": f"{path}: valid envelope"}
 
 
+def _changed_paths(base: str, cwd: Path) -> set[str] | None:
+    """Paths changed since `base` (committed + staged + worktree + untracked).
+    None if git fails."""
+    try:
+        tracked = subprocess.run(
+            ["git", "diff", "--name-only", base], cwd=cwd,
+            capture_output=True, text=True, timeout=30)
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd,
+            capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if tracked.returncode != 0 or untracked.returncode != 0:
+        return None
+    return {p for p in (tracked.stdout + untracked.stdout).splitlines() if p.strip()}
+
+
+def diff_matches_claims(envelope_path: str, base: str = "HEAD",
+                        cwd: str | Path | None = None) -> dict:
+    """SSSF-pattern gate: the envelope's changed_files claim must match the
+    real diff — every claimed file actually changed, and no unclaimed changes
+    exist outside it. Catches both overclaiming and silent extra edits."""
+    root = Path(cwd) if cwd else REPO_ROOT
+    env = json_parse(envelope_path)
+    if not env["pass"]:
+        return {"gate": "diff_matches_claims", "pass": False,
+                "detail": f"envelope invalid first: {env['detail']}"}
+    claimed = set(json.loads(_resolve(envelope_path).read_text())["changed_files"])
+    actual = _changed_paths(base, root)
+    if actual is None:
+        return {"gate": "diff_matches_claims", "pass": False,
+                "detail": "git diff unavailable; cannot verify claims"}
+    phantom = sorted(claimed - actual)      # claimed but never changed
+    unclaimed = sorted(actual - claimed)    # changed but not claimed
+    ok = not phantom and not unclaimed
+    detail = ("claimed changed_files match the real diff exactly" if ok else
+              f"phantom claims: {phantom}; unclaimed changes: {unclaimed}")
+    return {"gate": "diff_matches_claims", "pass": ok, "detail": detail}
+
+
+def protected_paths_untouched(base: str = "HEAD",
+                              cwd: str | Path | None = None,
+                              config_path: str | Path | None = None) -> dict:
+    """SSSF-pattern gate: no change since `base` may touch a path under
+    `protected_files` in sssf.config.yaml — workers must not edit the
+    machinery that grades them, frozen evidence, or claim documents."""
+    root = Path(cwd) if cwd else REPO_ROOT
+    cfg_file = Path(config_path) if config_path else root / "sssf.config.yaml"
+    try:
+        import yaml
+        protected = (yaml.safe_load(cfg_file.read_text()) or {}).get("protected_files") or []
+    except Exception as exc:
+        return {"gate": "protected_paths_untouched", "pass": False,
+                "detail": f"cannot read protected_files from {cfg_file}: {exc}"}
+    if not protected:
+        return {"gate": "protected_paths_untouched", "pass": False,
+                "detail": f"no protected_files declared in {cfg_file} — declare them"}
+    actual = _changed_paths(base, root)
+    if actual is None:
+        return {"gate": "protected_paths_untouched", "pass": False,
+                "detail": "git diff unavailable; cannot verify"}
+    hits = sorted(p for p in actual if any(p == q or p.startswith(q.rstrip("/") + "/")
+                                           for q in protected))
+    ok = not hits
+    return {"gate": "protected_paths_untouched", "pass": ok,
+            "detail": ("no protected path touched" if ok
+                       else f"PROTECTED PATHS MODIFIED: {hits}")}
+
+
 def _run_check(python: Path, args: list[str], cwd: Path) -> tuple[bool, str]:
     try:
         proc = subprocess.run(
@@ -242,6 +311,13 @@ def main(argv: list[str] | None = None) -> int:
     p_json = sub.add_parser("json", help="Validate a JSON phase envelope.")
     p_json.add_argument("path")
 
+    p_dmc = sub.add_parser("diffclaims", help="Envelope changed_files must match the real diff.")
+    p_dmc.add_argument("envelope")
+    p_dmc.add_argument("--base", default="HEAD")
+
+    p_prot = sub.add_parser("protected", help="No change may touch protected_files from sssf.config.yaml.")
+    p_prot.add_argument("--base", default="HEAD")
+
     p_quality = sub.add_parser("quality", help="Run pytest + ruff/mypy (if installed).")
     p_quality.add_argument("--python", default=None, help="Path to python interpreter (default: .venv/bin/python)")
     p_quality.add_argument("--cwd", default=None,
@@ -256,6 +332,10 @@ def main(argv: list[str] | None = None) -> int:
         result = files_non_empty(args.paths)
     elif args.command == "json":
         result = json_parse(args.path)
+    elif args.command == "diffclaims":
+        result = diff_matches_claims(args.envelope, base=args.base)
+    elif args.command == "protected":
+        result = protected_paths_untouched(base=args.base)
     elif args.command == "quality":
         result = code_quality(python=args.python, cwd=args.cwd)
     else:  # pragma: no cover - argparse guards this
