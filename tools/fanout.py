@@ -177,7 +177,8 @@ def _call_codex_oneshot(target: dict, prompt: str, system: str | None,
     model = target["model"]
     full_prompt = (f"{system}\n\n{prompt}" if system else prompt)
     start = time.monotonic()
-    argv = ["codex", "exec", "--sandbox", "read-only", "-m", model, full_prompt]
+    argv = ["codex", "exec", "--sandbox", "read-only", "-m", model,
+            "-c", 'model_reasoning_effort="high"', full_prompt]
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
         if proc.returncode != 0 or '"type":"error"' in proc.stdout:
@@ -216,7 +217,8 @@ def _call_route(target: dict, prompt: str, system: str | None,
     last_error = None
     for attempt in range(retries + 1):
         try:
-            result = request("/chat/completions", {"model": model, "messages": messages})
+            result = request("/chat/completions", {"model": model, "messages": messages},
+                         timeout=timeout)
             text = result["choices"][0]["message"]["content"]
             latency = round(time.monotonic() - start, 1)
             response_chars = len(text)

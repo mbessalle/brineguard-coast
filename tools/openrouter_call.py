@@ -39,13 +39,15 @@ def load_key() -> str:
     sys.exit("No OpenRouter key: set OPENROUTER_API_KEY or put OPENROUTER_API_KEY=... in .env")
 
 
-def request(path: str, payload: dict | None = None) -> dict:
+def request(path: str, payload: dict | None = None, timeout: int = 120) -> dict:
     req = urllib.request.Request(
         BASE + path,
         data=json.dumps(payload).encode() if payload else None,
         headers={"Authorization": f"Bearer {load_key()}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=120) as response:
+    # timeout is socket-silence, and non-streaming chat sends nothing until done —
+    # so this must be >= the longest expected model thinking time (caller decides)
+    with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.load(response)
 
 
