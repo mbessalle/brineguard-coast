@@ -103,20 +103,29 @@ def _shell_quote(s: str) -> str:
 def _pi_openrouter_cmd(model: str, role_prompt_path: str) -> str:
     """Compose the pi launch command for ``orca terminal create --command``.
 
-    Wraps pi in ``bash -lc`` so it inherits a login environment and exports
-    the OpenRouter key from the local key store.  The key never appears on
-    argv.
+    Nested inline quoting through terminal-create -> bash -> python proved
+    fragile (two live failures), so the launch is written to a small script
+    file and the terminal simply runs ``bash <script>``. The key is exported
+    inside the script via tools/openrouter_call.py:load_key and never appears
+    on argv or in this process's output.
     """
-    # The inner command string (inside bash single-quotes).
-    # Bash single-quotes treat every character literally, so ``\\"`` in
-    # the Python single-quoted string produces ``\"`` in the final output,
-    # which becomes a literal ``"`` inside the Python -c string.
-    bash_inside = (
-        f'cd {REPO_ROOT} && '
-        'export OPENROUTER_API_KEY="$(python3 -c \\"import sys;sys.path.insert(0,\\"tools\\");from openrouter_call import load_key;print(load_key())\\")" && '
-        f'exec pi --provider openrouter --model {model} --append-system-prompt {role_prompt_path}'
+    import tempfile
+    script = (
+        "#!/usr/bin/env bash\n"
+        f"cd {REPO_ROOT} || exit 1\n"
+        "export OPENROUTER_API_KEY=\"$(python3 - <<'PYEOF'\n"
+        "import sys\n"
+        "sys.path.insert(0, 'tools')\n"
+        "from openrouter_call import load_key\n"
+        "print(load_key())\n"
+        "PYEOF\n"
+        ")\"\n"
+        f"exec pi --provider openrouter --model {model} --append-system-prompt {role_prompt_path}\n"
     )
-    return f"bash -lc '{bash_inside}'"
+    fd, path = tempfile.mkstemp(prefix="orca_dispatch_launch_", suffix=".sh")
+    with open(fd, "w", encoding="utf-8") as f:
+        f.write(script)
+    return f"bash {path}"
 
 
 # ---------------------------------------------------------------------------
