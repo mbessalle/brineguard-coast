@@ -55,6 +55,19 @@ python3 tools/probe.py                                    # probe everything
 python3 tools/probe.py pi --model moonshotai/kimi-k3      # one route, model override
 ```
 
+## fanout.py
+
+Concurrent read-only multi-route fan-out engine for /fh-opinion and /fh-debate skills.
+Resolves every requested route to a chat-only OpenRouter API call (no agentic paths);
+routes on session/codex-cli backends are skipped. Output is anonymized — saved files
+use alias labels only, never real model names.
+
+```bash
+python3 tools/fanout.py --prompt "Tell me about Python"       # fanned to default routes
+python3 tools/fanout.py --prompt-file question.md --routes scout,builder
+python3 tools/fanout.py --prompt "x" --dry-run                # inspect planned calls
+```
+
 ## session_brief.sh
 
 Deterministic session-start orientation (git state, memory index, docs, agent CLI +
