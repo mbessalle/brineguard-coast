@@ -31,6 +31,22 @@ GEMINI_API_KEY=$(cat .env.gemini_key) python3 tools/gemini_flash.py "your prompt
 
 ## Key file
 
+## model_freshness.py
+
+Zero-token model-drift detector — diffs pinned SSSF routes against the live
+OpenRouter catalog and the local codex models cache. Run at every session start
+(via `session_brief.sh`). Exit 0 always (informational).
+
+```bash
+python3 tools/model_freshness.py                # human-readable report
+python3 tools/model_freshness.py --json         # machine-readable
+python3 tools/model_freshness.py --config /tmp/cfg.yaml  # test with doctored config
+```
+
+Output: one "DRIFT …" line per stale route + summary; or "all pinned routes current".
+
+## Key file
+
 `.env.gemini_key` (gitignored) holds the raw Gemini API key, one line, no quotes.
 Never commit it or print it to a shared/logged terminal.
 
