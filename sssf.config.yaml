@@ -98,8 +98,11 @@ routes:
   # Lightweight C/D tier via OpenRouter (smoke-tested 2026-08-25; :free = $0):
   lightweight:          {backend: openrouter-api, model: "nvidia/nemotron-3.5-lightning:free",
                          usd_per_m_in: 0.0, usd_per_m_out: 0.0}
-  lightweight_qwen:     {backend: openrouter-api, model: qwen/qwen3-30b-a3b-instruct-2507,
-                         usd_per_m_in: 0.048, usd_per_m_out: 0.193}
+  lightweight_qwen:     {backend: openrouter-api, model: qwen/qwen3.5-9b,
+                         usd_per_m_in: 0.10, usd_per_m_out: 0.15}
+  # NOTE: qwen3.5-flash rejected — leaks reasoning chain into content (verbose,
+  # unusable for utility calls). Pinned dated/base IDs are preferred over
+  # provider "-latest" aliases so FREEZE.md reproducibility holds.
 
 # ---------------------------------------------------------------------------
 # Model anonymization (system-orchestration.md §1). NEVER expose real model
