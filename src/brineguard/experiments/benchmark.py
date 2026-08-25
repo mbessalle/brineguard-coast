@@ -44,7 +44,7 @@ def _exposure_metrics(config: dict, rec: np.ndarray) -> dict:
 def _energy_and_water(config: dict, production_m3_h: np.ndarray) -> dict:
     cfg = config["dispatch"]
     plants = cfg["plants"]
-    tariff = np.asarray(cfg["tariff"], dtype=float)
+    tariff = np.asarray(cfg["tariff"][: len(production_m3_h)], dtype=float)
     energy_rates = np.array([p["energy_kwh_m3"] for p in plants])
     return {
         "energy_cost": float(np.sum(tariff[:, None] * energy_rates[None, :] * production_m3_h)),

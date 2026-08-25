@@ -75,3 +75,16 @@ def test_audit_schedule_catches_storage_recursion_violation():
     audit = audit_schedule(config, baseline["production_m3_h"], storage)
     assert not audit["pass"]
     assert "storage_recursion_max_abs_error_m3" in audit["violations"]
+
+
+def test_series_longer_than_horizon_slices_cleanly():
+    import copy
+    from brineguard.dispatch.verify import audit_schedule
+    config = copy.deepcopy(load_config("configs/first_slice.yaml"))
+    config["dispatch"]["demand_m3_h"] = config["dispatch"]["demand_m3_h"] * 4
+    config["dispatch"]["tariff"] = config["dispatch"]["tariff"] * 4
+    from brineguard.dispatch.model import constant_schedule
+    result = constant_schedule(config)
+    assert result["production_m3_h"].shape[0] == config["dispatch"]["horizon_hours"]
+    audit = audit_schedule(config, result["production_m3_h"], result["storage_m3"])
+    assert audit["pass"], audit["violations"]

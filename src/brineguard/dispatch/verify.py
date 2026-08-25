@@ -12,7 +12,9 @@ def audit_schedule(config: dict, production_m3_h: np.ndarray, storage_m3: np.nda
     the config (BUILD_PLAN Phase 2 gate: zero water-balance violations).
     """
     cfg = config["dispatch"]
-    demand = np.asarray(cfg["demand_m3_h"], dtype=float)
+    # Audit whatever length the schedule has (a 48h window or a full rolled
+    # series); the config series may be longer than the schedule.
+    demand = np.asarray(cfg["demand_m3_h"][: len(production_m3_h)], dtype=float)
     tank = cfg["tank"]
     plants = cfg["plants"]
     minimum = np.array([p["min_m3_h"] for p in plants])
