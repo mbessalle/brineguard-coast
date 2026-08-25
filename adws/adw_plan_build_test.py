@@ -83,7 +83,7 @@ def _git_diff_files() -> list[str]:
 def run(request: str, *, dry_run: bool, commit: bool) -> int:
     config = adw_common.load_config()
     planner_model = adw_common.model_for_role(config, "planner")
-    builder_model = adw_common.model_for_role(config, "builder")
+    builder_model = adw_common.route_model(config, "builder")
     max_retries = config["routing"]["retry_policy"]["max_builder_retries"]
 
     session_id = adw_common.new_session_id()
@@ -92,6 +92,7 @@ def run(request: str, *, dry_run: bool, commit: bool) -> int:
     logger.info(f"session_id={session_id} max_builder_retries={max_retries}")
 
     # --- Phase 1: Planner (Tier 1) ---
+    planner_model = adw_common.model_for_role(config, "planner")
     logger.phase_start("planner", "planner", planner_model)
     ok, plan_text = adw_common.run_claude(
         PLANNER_PROMPT_TEMPLATE.format(request=request),
@@ -128,7 +129,7 @@ def run(request: str, *, dry_run: bool, commit: bool) -> int:
             )
         builder_prompt = BUILDER_PROMPT_TEMPLATE.format(plan=plan_text, retry_context=retry_context)
 
-        ok, builder_output = adw_common.run_claude(builder_prompt, builder_model, dry_run=dry_run)
+        ok, builder_output = adw_common.run_route("builder", builder_prompt, dry_run=dry_run, logger=logger)
         envelope_path = handoff / "envelope.json"
         changed_files = [] if dry_run else _git_diff_files()
         adw_common.write_envelope(

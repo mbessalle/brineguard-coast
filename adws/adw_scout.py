@@ -42,7 +42,7 @@ Respond with a concise Markdown report covering:
 
 def run(topic: str, *, dry_run: bool) -> int:
     config = adw_common.load_config()
-    model = adw_common.model_for_role(config, "scout")
+    model = adw_common.route_model(config, "scout")
     session_id = adw_common.new_session_id()
     logger = adw_common.PhaseLogger(session_id)
     handoff = adw_common.handoff_dir(session_id)
@@ -51,12 +51,7 @@ def run(topic: str, *, dry_run: bool) -> int:
     logger.phase_start("scout", "scout", model)
 
     prompt = SCOUT_PROMPT_TEMPLATE.format(topic=topic)
-    ok, output = adw_common.run_claude(
-        prompt,
-        model,
-        dry_run=dry_run,
-        permission_mode="plan",  # read-only: no edits, no mutating tool calls
-    )
+    ok, output = adw_common.run_route("scout", prompt, dry_run=dry_run, logger=logger)
 
     findings_path = handoff / "scout_findings.md"
     envelope_path = handoff / "envelope.json"
