@@ -77,14 +77,16 @@ def constant_schedule(config: dict) -> dict:
     sized so horizon demand and the terminal-storage condition are met exactly.
     Feasibility is judged by the same `verify.audit_schedule` used for optimized runs."""
     cfg = config["dispatch"]
-    demand = np.asarray(cfg["demand_m3_h"], dtype=float)
     tank, plants, hours = cfg["tank"], cfg["plants"], cfg["horizon_hours"]
+    # Series may be longer than the horizon (rolling/benchmark configs);
+    # like solve_dispatch, only the first horizon_hours are used.
+    demand = np.asarray(cfg["demand_m3_h"][:hours], dtype=float)
     capacities = np.array([p["max_m3_h"] for p in plants])
     total_rate = (demand.sum() + tank["terminal_m3"] - tank["initial_m3"]) / hours
     production = np.tile(total_rate * capacities / capacities.sum(), (hours, 1))
     storage = tank["initial_m3"] + np.cumsum(production.sum(axis=1) - demand)
     factors = np.array([load_factor_kg_s_per_m3_h(p) for p in plants])
-    tariff = np.asarray(cfg["tariff"], dtype=float)
+    tariff = np.asarray(cfg["tariff"][:hours], dtype=float)
     energy_rates = np.array([p["energy_kwh_m3"] for p in plants])
     return {
         "production_m3_h": production, "storage_m3": storage,
