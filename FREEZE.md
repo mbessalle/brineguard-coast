@@ -13,3 +13,12 @@ Honesty note: development-time results for phase3/phase3_tidal WERE inspected
 while building Phases 2-4 (commits are the log). This freeze binds the final
 regenerated bundle: no config/seed/weight changes after this point in response
 to final numbers. Any post-freeze change requires a new dated freeze entry.
+
+## Post-freeze addendum 2026-08-25T10:46Z — audit-driven correction
+Independent adversarial audit (GPT-5.6 Sol, dispatch ctx_440d47be4d5e) found the
+ensemble's coordinated schedule was not cost-capped, making the benefit
+distribution a non-matched claim. Fix: ensemble.py caps C at the cheaper B's
+nominal energy. Regenerated as runs/phase4-ensemble-v2 (same members/seed);
+corrected minima 14.5%/16.1%, all 20 members positive, cap binding. This change
+was made because of a methodology flaw, NOT in response to unfavorable numbers
+(the corrected numbers are marginally lower and are the ones now reported).

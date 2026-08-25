@@ -129,6 +129,13 @@ def _held_out_stats(values: np.ndarray) -> dict:
     }
 
 
+def _nominal_energy(config: dict, production_m3_h: np.ndarray) -> float:
+    cfg = config["dispatch"]
+    tariff = np.asarray(cfg["tariff"][: len(production_m3_h)], dtype=float)
+    rates = np.array([p["energy_kwh_m3"] for p in cfg["plants"]])
+    return float(np.sum(tariff[:, None] * rates[None, :] * production_m3_h))
+
+
 def _solve_nominal(strategy: str, config: dict, kernel: np.ndarray) -> dict:
     """Optimize the given strategy ONCE on the nominal member; return its frozen
     schedule (production and derived loads)."""
@@ -160,8 +167,17 @@ def evaluate_common_schedules(config: dict, n_members: int, seed: int,
     nominal = members[0]["config"]
     kernel = build_kernel(nominal)
     result: dict = {"members": members, "strategies": {}}
+    schedules: dict = {strategy: _solve_nominal(strategy, nominal, kernel)
+                       for strategy in strategies}
+    # Audit finding (2026-08-25, independent review): C must be cost-capped at
+    # the cheapest B's nominal energy, else the benefit distribution is not a
+    # matched-cost claim. Re-solve C under that cap when B strategies exist.
+    b_costs = [_nominal_energy(nominal, schedules[s]["production_m3_h"])
+               for s in ("B_capacity", "B_cost") if s in schedules]
+    if "C" in schedules and b_costs:
+        schedules["C"] = solve_dispatch(nominal, kernel, cost_cap=min(b_costs))
     for strategy in strategies:
-        schedule = _solve_nominal(strategy, nominal, kernel)
+        schedule = schedules[strategy]
         loads = schedule["loads_kg_s"]
         exposure_per_member = []
         for member in members:
@@ -170,6 +186,7 @@ def evaluate_common_schedules(config: dict, n_members: int, seed: int,
         entry: dict = {
             "exposure_per_member": exposure_per_member,
             "held_out": _held_out_stats(np.array(exposure_per_member)),
+            "nominal_energy_cost": _nominal_energy(nominal, schedule["production_m3_h"]),
             "production_m3_h": schedule["production_m3_h"],
             "loads_kg_s": loads,
         }
@@ -213,6 +230,7 @@ def run_ensemble(config_path: str | Path, run_id: str | None, *,
         s = {
             "exposure_per_member": entry["exposure_per_member"],
             "held_out": entry["held_out"],
+            "nominal_energy_cost": entry.get("nominal_energy_cost"),
         }
         if "benefit_distribution" in entry:
             s["benefit_distribution"] = entry["benefit_distribution"]
