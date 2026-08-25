@@ -5,32 +5,45 @@ Style mirrors tools/probe.py: backend rows are data, adding a route or
 changing a model is a one-line edit, not new code.
 
 Agent rows:
-  claude         worker-start --agent claude
-  codex          worker-start --agent codex
-  pi-openrouter  two-step: terminal create + orchestration dispatch --inject
+  claude           orchestration worker-start --task <id> --worktree current --agent claude
+  pi-openrouter    two-step: terminal create (or --terminal reuse) + dispatch --inject
+  pi-openai-codex  same two-step, provider openai-codex (OAuth, no key)
 
 Subcommands:
-  run    --spec <text|@file> --route <route-from-sssf-config> [--wait] [--dry-run]
-  status task-list --brief + worker summary
-  send   --dispatch <id> --body <text>
+  run    --spec <text|@file> --route <route> [--wait] [--terminal <handle>] [--dry-run]
+  wait   [--timeout <s>]                block on worker_done/escalation/question, ack
+  status task-list + worker summary
+  send   --dispatch <id> --body <text>  follow-up to a dispatched worker
 
-Usage:
-  python3 tools/orca_dispatch.py run --spec "add X" --route builder --dry-run
-  python3 tools/orca_dispatch.py status
-  python3 tools/orca_dispatch.py send --dispatch ctx_abc123 --body "proceed"
+Every live dispatch appends a JSON line to adw_data/dispatch_ledger.jsonl
+(task_id, terminal, dispatch_id, route, spec head) so correlation survives
+orchestrator crashes and compaction.
+
+Grammar verified against `orca skills get orchestration` (v1.4.188+):
+  check --wait --types worker_done,escalation,question --timeout-ms <n>
+  a Delivery replays until `check --ack <delivery_id>`; ack after processing.
+  send --to dispatch:<id> --subject <s> --body <b>
 """
 from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "sssf.config.yaml"
+LEDGER_PATH = REPO_ROOT / "adw_data" / "dispatch_ledger.jsonl"
+
+WAIT_TYPES = "worker_done,escalation,question"
+CHECK_CHUNK_MS = 300_000  # single rolling check --wait window (5 min)
+DEFAULT_ORCA_TIMEOUT = 120  # client-side subprocess timeout for non-wait calls
 
 
 def load_sssf_config() -> dict:
@@ -39,41 +52,52 @@ def load_sssf_config() -> dict:
 
 
 def _resolve_spec(spec: str) -> str:
-    """If spec starts with @, read from the named file; otherwise literal."""
+    """If spec starts with @, read from the named file (resolved against cwd,
+    then REPO_ROOT); otherwise literal."""
     if spec.startswith("@"):
         p = Path(spec[1:])
+        if not p.is_file() and not p.is_absolute():
+            p = REPO_ROOT / spec[1:]
         if not p.is_file():
-            sys.exit(f"spec file not found: {p}")
+            sys.exit(f"spec file not found: {spec[1:]} (tried cwd and repo root)")
         return p.read_text()
     return spec
 
 
-def _orca(argv: list[str], *, dry_run: bool, json_output: bool = False) -> dict | None:
-    """Run an orca command, optionally parsing --json output. In --dry-run
-    mode prints the exact command and returns None.
-
-    --json is placed as a TRAILING flag (after the subcommand args), per the
-    Orca v1.4.188 reference.
+def _orca(argv: list[str], *, dry_run: bool, json_output: bool = False,
+          timeout: int = DEFAULT_ORCA_TIMEOUT) -> dict | None:
+    """Run an orca command with a client-side timeout. Returns the parsed
+    --json payload (transport info under _rc/_stderr on trouble), or a
+    {"_ok": bool} marker in plain mode. --dry-run prints and returns None.
     """
     cmd = ["orca"] + argv
     if json_output:
         cmd.append("--json")
-    # Build the display command — always include --json when json_output
-    # would be True in live mode, so --dry-run output matches reality.
     display_cmd = list(cmd)
     if not json_output:
         display_cmd.append("--json")
 
     if dry_run:
-        print(f"[dry-run] would execute: {' '.join(_shell_quote(c) for c in display_cmd)}")
+        print(f"[dry-run] would execute: {shlex.join(display_cmd)}")
         return None
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": {"code": "client_timeout",
+                                       "message": f"orca did not return within {timeout}s"}}
     if json_output:
         try:
-            return json.loads(proc.stdout) if proc.stdout else {}
+            out = json.loads(proc.stdout) if proc.stdout.strip() else {}
         except json.JSONDecodeError:
-            return {"_raw": proc.stdout, "_stderr": proc.stderr}
+            out = {"ok": False, "error": {"code": "bad_json", "message": "unparseable stdout"}}
+            out["_raw"] = proc.stdout
+        if proc.returncode != 0:
+            out.setdefault("ok", False)
+            out["_rc"] = proc.returncode
+        if proc.stderr:
+            out["_stderr"] = proc.stderr[-2000:]
+        return out
     print(proc.stdout)
     if proc.stderr:
         print(proc.stderr, file=sys.stderr)
@@ -81,26 +105,29 @@ def _orca(argv: list[str], *, dry_run: bool, json_output: bool = False) -> dict 
 
 
 def _check_ok(result: dict | None, step: str) -> None:
-    """Verify the top-level ``ok`` field is true; exit with a clear message
-    if it is not."""
     if result is None:
-        return  # dry-run, nothing to check
+        return  # dry-run
     if not result.get("ok"):
         err = result.get("error") or result.get("message") or json.dumps(result)
         sys.exit(f"orca error at step '{step}': {err}")
 
 
-def _shell_quote(s: str) -> str:
-    if not s or any(c in s for c in " \t\n\"'$"):
-        return "'" + s.replace("'", "'\\''") + "'"
-    return s
+def _ledger(record: dict) -> None:
+    """Append one correlation record; never let ledger failure kill a dispatch."""
+    try:
+        LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        record["ts"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with LEDGER_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError as exc:
+        print(f"[ledger] WARNING: could not write {LEDGER_PATH}: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
-# Pi-OpenRouter launch command
+# Pi launch command
 # ---------------------------------------------------------------------------
 
-def _pi_openrouter_cmd(model: str, role_prompt_path: str, provider: str = "openrouter") -> str:
+def _pi_launch_cmd(model: str, role_prompt_path: str, provider: str = "openrouter") -> str:
     """Compose the pi launch command for ``orca terminal create --command``.
 
     Nested inline quoting through terminal-create -> bash -> python proved
@@ -109,27 +136,35 @@ def _pi_openrouter_cmd(model: str, role_prompt_path: str, provider: str = "openr
     provider the key is exported inside the script via
     tools/openrouter_call.py:load_key and never appears on argv; the
     openai-codex provider needs no key (OAuth in ~/.pi/agent/auth.json).
+    The script validates the key, is strict-mode, and deletes itself.
     """
     import tempfile
     key_export = (
-        "export OPENROUTER_API_KEY=\"$(python3 - <<'PYEOF'\n"
+        "OPENROUTER_API_KEY=\"$(python3 - <<'PYEOF'\n"
         "import sys\n"
         "sys.path.insert(0, 'tools')\n"
         "from openrouter_call import load_key\n"
         "print(load_key())\n"
         "PYEOF\n"
         ")\"\n"
+        "[ -n \"$OPENROUTER_API_KEY\" ] || { echo 'FATAL: empty OpenRouter key' >&2; exit 1; }\n"
+        "export OPENROUTER_API_KEY\n"
     ) if provider == "openrouter" else ""
+    pi_argv = ["pi", "--provider", provider, "--model", model]
+    if role_prompt_path:
+        pi_argv += ["--append-system-prompt", role_prompt_path]
     script = (
         "#!/usr/bin/env bash\n"
-        f"cd {REPO_ROOT} || exit 1\n"
+        "set -euo pipefail\n"
+        f"cd {shlex.quote(str(REPO_ROOT))}\n"
         f"{key_export}"
-        f"exec pi --provider {provider} --model {model} --append-system-prompt {role_prompt_path}\n"
+        "rm -f -- \"$0\"\n"          # self-clean; bash keeps the open fd
+        f"exec {shlex.join(pi_argv)}\n"
     )
     fd, path = tempfile.mkstemp(prefix="orca_dispatch_launch_", suffix=".sh")
     with open(fd, "w", encoding="utf-8") as f:
         f.write(script)
-    return f"bash {path}"
+    return f"bash {shlex.quote(path)}"
 
 
 # ---------------------------------------------------------------------------
@@ -137,12 +172,13 @@ def _pi_openrouter_cmd(model: str, role_prompt_path: str, provider: str = "openr
 # ---------------------------------------------------------------------------
 AGENTS: dict[str, dict] = {
     "claude": {
-        "description": "Claude Code agent via orca worker-start",
-        "dispatch_cmd": ["worker-start", "--agent", "claude"],
+        "description": "Claude Code worker via orchestration worker-start",
+        "worker_start": True,
     },
     "pi-openrouter": {
-        "description": "pi with OpenRouter (two-step: terminal create + orchestration dispatch --inject)",
+        "description": "pi with OpenRouter (two-step: terminal create + dispatch --inject)",
         "two_step": True,
+        "pi_provider": "openrouter",
     },
     "pi-openai-codex": {
         "description": "pi on the OpenAI ChatGPT subscription OAuth (two-step, provider openai-codex)",
@@ -151,10 +187,122 @@ AGENTS: dict[str, dict] = {
     },
 }
 
+BACKEND_TO_AGENT = {
+    "claude-cli": "claude",
+    "pi-openrouter": "pi-openrouter",
+    "pi-openai-codex": "pi-openai-codex",
+}
+
+
+# ---------------------------------------------------------------------------
+# Completion wait (the previously-missing half of the handoff)
+# ---------------------------------------------------------------------------
+
+def _extract_delivery(result: dict) -> tuple[str | None, list[dict]]:
+    """Defensively pull (delivery_id, messages) out of a check --json payload.
+    Field names tolerated: result.delivery{.id,.messages} or flat variants."""
+    res = result.get("result") or {}
+    delivery = res.get("delivery") or res
+    delivery_id = (delivery.get("id") or delivery.get("deliveryId")
+                   or delivery.get("delivery_id"))
+    messages = delivery.get("messages") or res.get("messages") or []
+    if not isinstance(messages, list):
+        messages = []
+    return delivery_id, messages
+
+
+def wait_for_completion(timeout_s: int, *, dry_run: bool = False) -> int:
+    """Rolling `check --wait` until worker_done (0) or escalation (2).
+    Timeout returns 3; unparseable Delivery returns 4 WITHOUT acking so the
+    batch replays for manual handling. question messages are printed with
+    their reply command and acked (they do not end the wait).
+    An existing waiter (waiter_exists) degrades to plain-check polling."""
+    if dry_run:
+        print(f"[dry-run] would execute: orca orchestration check --wait "
+              f"--types {WAIT_TYPES} --timeout-ms {CHECK_CHUNK_MS} --json (rolling, ack after each batch)")
+        return 0
+    deadline = time.monotonic() + timeout_s
+    ack_id: str | None = None
+    poll_mode = False
+    outcome: int | None = None
+    while time.monotonic() < deadline:
+        argv = ["orchestration", "check", "--types", WAIT_TYPES]
+        if ack_id:
+            argv += ["--ack", ack_id]
+        if not poll_mode:
+            remaining_ms = max(10_000, min(CHECK_CHUNK_MS,
+                                           int((deadline - time.monotonic()) * 1000)))
+            argv += ["--wait", "--timeout-ms", str(remaining_ms)]
+            client_timeout = remaining_ms // 1000 + 30
+        else:
+            client_timeout = DEFAULT_ORCA_TIMEOUT
+        r = _orca(argv, dry_run=False, json_output=True, timeout=client_timeout)
+        ack_id = None
+        if not r.get("ok"):
+            err_text = json.dumps(r.get("error") or r).lower()
+            if "waiter" in err_text and not poll_mode:
+                print("[wait] active waiter already exists; degrading to 10s polling")
+                poll_mode = True
+                continue
+            print(f"[wait] check error: {r.get('error') or r}", file=sys.stderr)
+            return 4
+        delivery_id, messages = _extract_delivery(r)
+        if not messages:
+            if poll_mode:
+                time.sleep(10)
+            continue  # checkpoint ({count:0} / empty), keep waiting
+        if delivery_id is None:
+            print("[wait] UNPARSEABLE delivery (not acked, will replay):")
+            print(json.dumps(r, indent=2)[:4000])
+            return 4
+        for m in messages:
+            mtype = m.get("type", "?")
+            mid = m.get("id", "?")
+            body = m.get("body") or m.get("subject") or ""
+            print(f"[wait] {mtype} id={mid}: {str(body)[:2000]}")
+            if mtype == "worker_done":
+                outcome = 0
+            elif mtype == "escalation":
+                outcome = 2
+            elif mtype == "question":
+                print(f"[wait]   reply with: orca orchestration reply --id {mid} "
+                      f"--body '<answer>' --json")
+        ack_id = delivery_id
+        if outcome is not None:
+            # final ack for the batch that carried the terminal message
+            _orca(["orchestration", "check", "--ack", ack_id, "--types", WAIT_TYPES],
+                  dry_run=False, json_output=True)
+            return outcome
+    print(f"[wait] timeout after {timeout_s}s — checkpoint, not failure; "
+          f"worker may still be running (re-run `wait`)")
+    return 3
+
+
+# ---------------------------------------------------------------------------
+# run
+# ---------------------------------------------------------------------------
+
+def _task_create(spec: str, *, dry_run: bool) -> str:
+    """task-create with run-create fallback ONLY on a run-binding error."""
+    tr = _orca(["orchestration", "task-create", "--spec", spec],
+               dry_run=dry_run, json_output=not dry_run)
+    if dry_run:
+        return "<task_id>"
+    if tr and not tr.get("ok"):
+        err_text = json.dumps(tr.get("error") or tr).lower()
+        if "run" in err_text and any(w in err_text for w in ("bound", "bind", "no active", "missing")):
+            print("[run] no bound Run — creating one")
+            rr = _orca(["orchestration", "run-create", "--objective", spec[:200]],
+                       dry_run=False, json_output=True)
+            _check_ok(rr, "run-create")
+            tr = _orca(["orchestration", "task-create", "--spec", spec],
+                       dry_run=False, json_output=True)
+        # any other error class falls through to _check_ok and exits loudly
+    _check_ok(tr, "task-create")
+    return tr["result"]["task"]["id"]
+
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run a dispatch: resolve route from sssf.config.yaml, pick the right
-    agent, build the orca command, and execute (or dry-run it)."""
     config = load_sssf_config()
     route_name = args.route
     if route_name not in config["routes"]:
@@ -164,166 +312,103 @@ def cmd_run(args: argparse.Namespace) -> int:
     backend_name = route["backend"]
     model = route["model"]
 
-    # Print cost info if present
-    cost_parts = []
-    for field in ("usd_per_m_in", "usd_per_m_out"):
-        if field in route:
-            cost_parts.append(f"{field}={route[field]}")
-    if cost_parts:
-        print(f"[cost] route={route_name} backend={backend_name} model={model} {', '.join(cost_parts)}")
-    else:
-        print(f"[cost] route={route_name} backend={backend_name} model={model} (no cost data)")
+    cost_parts = [f"{f}={route[f]}" for f in ("usd_per_m_in", "usd_per_m_out") if f in route]
+    print(f"[cost] route={route_name} backend={backend_name} model={model} "
+          f"{', '.join(cost_parts) if cost_parts else '(no cost data)'}")
+
+    if backend_name not in BACKEND_TO_AGENT:
+        sys.exit(f"route '{route_name}' uses backend '{backend_name}' which has no Orca "
+                 f"agent mapping. Supported: {sorted(BACKEND_TO_AGENT)}. "
+                 f"(session/openrouter-api routes are not dispatchable workers.)")
+    agent = AGENTS[BACKEND_TO_AGENT[backend_name]]
 
     spec = _resolve_spec(args.spec)
-    # Derive a short title for the terminal from the spec (first line or truncated)
     title = spec.strip().split("\n", 1)[0][:80]
 
-    # Map backend to agent row
-    if backend_name == "claude-cli":
-        agent_name = "claude"
-    elif backend_name == "pi-openrouter":
-        agent_name = "pi-openrouter"
-    elif backend_name == "pi-openai-codex":
-        agent_name = "pi-openai-codex"
-    else:
-        sys.exit(
-            f"route '{route_name}' uses backend '{backend_name}' which has no "
-            f"Orca agent mapping. Supported backends: claude-cli, pi-openrouter, pi-openai-codex."
-        )
+    task_id = _task_create(spec, dry_run=args.dry_run)
+    if not args.dry_run:
+        print(f"[run] task_id={task_id}")
 
-    agent = AGENTS[agent_name]
+    term_handle = None
+    dispatch_id = None
 
-    if agent.get("two_step"):
-        # --- pi-openrouter path ---
-        role_prompt_path = route.get("role_prompt", "")
-
-        # Step 0 — Idempotent run-create: try task-create first; only
-        # run-create if it fails for lack of a bound Run.
-        print("[pi-openrouter] step 0: ensure Run exists (idempotent)")
-        tr = _orca(
-            ["orchestration", "task-create", "--spec", spec],
-            dry_run=args.dry_run,
-            json_output=not args.dry_run,
-        )
-        if not args.dry_run and tr and not tr.get("ok"):
-            print("[pi-openrouter]   no bound Run — creating one")
-            rr = _orca(
-                ["orchestration", "run-create", "--objective", spec],
-                dry_run=False,
-                json_output=True,
-            )
-            _check_ok(rr, "run-create")
-            tr = _orca(
-                ["orchestration", "task-create", "--spec", spec],
-                dry_run=False,
-                json_output=True,
-            )
-        _check_ok(tr, "task-create")
-        if args.dry_run:
-            task_id = "<task_id>"
-        else:
-            task_id = tr["result"]["task"]["id"]
-            print(f"[pi-openrouter]   task_id={task_id}")
-
-        # Step 1 — terminal create
-        pi_cmd = _pi_openrouter_cmd(model, role_prompt_path,
-                                    provider=agent.get("pi_provider", "openrouter"))
-        print(f"[pi-openrouter] step 1: terminal create")
-        tc = _orca(
-            [
-                "terminal", "create",
-                "--worktree", "active",
-                "--title", title,
-                "--command", pi_cmd,
-            ],
-            dry_run=args.dry_run,
-            json_output=not args.dry_run,
-        )
-        if args.dry_run:
-            term_handle = "<term_handle>"
-        else:
-            _check_ok(tc, "terminal create")
-            term_handle = tc["result"]["terminal"]["handle"]
-            print(f"[pi-openrouter]   terminal handle={term_handle}")
-
-        # Step 2 — wait for terminal to be idle
-        print(f"[pi-openrouter] step 2: waiting for terminal (timeout 60s)")
-        tw = _orca(
-            [
-                "terminal", "wait",
-                "--terminal", term_handle,
-                "--for", "tui-idle",
-                "--timeout-ms", "60000",
-            ],
-            dry_run=args.dry_run,
-            json_output=not args.dry_run,
-        )
+    if agent.get("worker_start"):
+        ws = ["orchestration", "worker-start", "--task", task_id,
+              "--worktree", "current", "--agent", "claude"]
+        if model and model != "claude-fable-5":
+            ws += ["--model", model]
+        r = _orca(ws, dry_run=args.dry_run, json_output=not args.dry_run)
         if not args.dry_run:
-            _check_ok(tw, "terminal wait")
-
-        # Step 3 — orchestration dispatch --inject
-        print(f"[pi-openrouter] step 3: orchestration dispatch --inject")
-        dr = _orca(
-            [
-                "orchestration", "dispatch",
-                "--task", task_id,
-                "--to", term_handle,
-                "--inject",
-            ],
-            dry_run=args.dry_run,
-            json_output=not args.dry_run,
-        )
-        if args.dry_run:
-            return 0
-        _check_ok(dr, "orchestration dispatch")
-        dispatch_id = dr["result"]["dispatch"]["id"]
-        print(f"[pi-openrouter]   dispatch_id={dispatch_id}")
-
-        if args.wait:
-            print("[pi-openrouter] --wait requested; would block on worker_done (not implemented)")
-
+            _check_ok(r, "worker-start")
+            res = r.get("result") or {}
+            dispatch_id = (res.get("dispatch") or {}).get("id") or res.get("dispatchId")
+            print(f"[run] worker started; dispatch_id={dispatch_id}")
     else:
-        # Direct worker-start
-        dispatch_cmd = list(agent["dispatch_cmd"])
-        # For codex, spec is just the prompt; for claude, we use --spec
-        if agent_name == "codex":
-            dispatch_cmd.append(spec)
+        # --- two-step pi path ---
+        if args.terminal:
+            term_handle = args.terminal
+            print(f"[run] reusing terminal {term_handle} (skipping create + idle wait)")
         else:
-            dispatch_cmd.extend(["--model", model])
-            dispatch_cmd.append(spec)
+            pi_cmd = _pi_launch_cmd(model, route.get("role_prompt", ""),
+                                    provider=agent["pi_provider"])
+            tc = _orca(["terminal", "create", "--worktree", "active",
+                        "--title", title, "--command", pi_cmd],
+                       dry_run=args.dry_run, json_output=not args.dry_run)
+            if args.dry_run:
+                term_handle = "<term_handle>"
+            else:
+                _check_ok(tc, "terminal create")
+                term_handle = tc["result"]["terminal"]["handle"]
+                print(f"[run] terminal handle={term_handle}")
+            tw = _orca(["terminal", "wait", "--terminal", term_handle,
+                        "--for", "tui-idle", "--timeout-ms", "60000"],
+                       dry_run=args.dry_run, json_output=not args.dry_run,
+                       timeout=90)
+            if not args.dry_run:
+                _check_ok(tw, "terminal wait")
+        dr = _orca(["orchestration", "dispatch", "--task", task_id,
+                    "--to", term_handle, "--inject"],
+                   dry_run=args.dry_run, json_output=not args.dry_run)
+        if not args.dry_run:
+            _check_ok(dr, "orchestration dispatch")
+            dispatch_id = dr["result"]["dispatch"]["id"]
+            print(f"[run] dispatch_id={dispatch_id}")
 
-        result = _orca(dispatch_cmd, dry_run=args.dry_run, json_output=True)
+    if not args.dry_run:
+        _ledger({"event": "dispatch", "route": route_name, "model": model,
+                 "task_id": task_id, "terminal": term_handle,
+                 "dispatch_id": dispatch_id, "spec_head": title})
 
-        if args.dry_run:
-            if args.wait:
-                print("[dry-run] would wait for worker completion")
-            return 0
-
-        if result and args.wait:
-            print("[--wait] worker dispatched; wait logic not implemented (use orca directly)")
-
+    if args.wait:
+        rc = wait_for_completion(args.timeout, dry_run=args.dry_run)
+        if not args.dry_run:
+            _ledger({"event": "wait_result", "task_id": task_id,
+                     "dispatch_id": dispatch_id, "rc": rc})
+        return rc
     return 0
 
 
+def cmd_wait(args: argparse.Namespace) -> int:
+    return wait_for_completion(args.timeout, dry_run=args.dry_run)
+
+
 def cmd_status(args: argparse.Namespace) -> int:
-    """Show task list + worker summary."""
     print("=== orca orchestration task-list --brief ===")
-    result = _orca(
-        ["orchestration", "task-list", "--brief"],
-        dry_run=args.dry_run,
-        json_output=not args.dry_run,
-    )
+    result = _orca(["orchestration", "task-list", "--brief"],
+                   dry_run=args.dry_run, json_output=not args.dry_run)
     if args.dry_run:
         return 0
-
-    if result and isinstance(result, list):
-        for task in result:
+    tasks = (result.get("result") or {}).get("tasks") if isinstance(result, dict) else None
+    if tasks is None and isinstance(result, list):
+        tasks = result
+    if tasks:
+        for task in tasks:
             tid = task.get("id", "?")
             status = task.get("status", "?")
-            title = task.get("title") or task.get("subject", "?")
+            title = task.get("title") or task.get("subject") or task.get("spec", "?")[:60]
             print(f"  {tid:20} {status:12} {title}")
-    elif result:
-        print(f"  (raw output): {result}")
+    else:
+        print(f"  (no tasks or unrecognized shape): {json.dumps(result)[:500]}")
 
     print("\n=== worker summary ===")
     _orca(["worker", "summary"], dry_run=False)
@@ -331,12 +416,12 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_send(args: argparse.Namespace) -> int:
-    """Send a message to a dispatched worker."""
-    _orca(
-        ["orchestration", "send", "--dispatch", args.dispatch, "--body", args.body],
-        dry_run=args.dry_run,
-        json_output=not args.dry_run,
-    )
+    r = _orca(["orchestration", "send", "--to", f"dispatch:{args.dispatch}",
+               "--subject", "Follow-up", "--body", args.body],
+              dry_run=args.dry_run, json_output=not args.dry_run)
+    if not args.dry_run:
+        _check_ok(r, "send")
+        print(f"[send] delivered to dispatch:{args.dispatch}")
     return 0
 
 
@@ -348,30 +433,28 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_run = sub.add_parser("run", help="Dispatch a spec to a route's agent.")
-    p_run.add_argument("--spec", required=True, help="Prompt text, or @path/to/file to read from a file.")
-    p_run.add_argument("--route", required=True, help="Route name from sssf.config.yaml (e.g. builder, scout).")
-    p_run.add_argument("--wait", action="store_true", help="Block until the worker completes.")
-    p_run.add_argument("--dry-run", action="store_true", help="Print orca commands without executing.")
+    p_run.add_argument("--spec", required=True, help="Prompt text, or @path/to/file.")
+    p_run.add_argument("--route", required=True, help="Route name from sssf.config.yaml.")
+    p_run.add_argument("--wait", action="store_true", help="Block on worker_done/escalation, ack, return.")
+    p_run.add_argument("--timeout", type=int, default=3600, help="--wait budget in seconds (default 3600).")
+    p_run.add_argument("--terminal", help="Reuse an existing idle pi terminal handle (skips create + 60s idle wait).")
+    p_run.add_argument("--dry-run", action="store_true")
+
+    p_wait = sub.add_parser("wait", help="Block on the Run's worker_done/escalation/question events.")
+    p_wait.add_argument("--timeout", type=int, default=3600)
+    p_wait.add_argument("--dry-run", action="store_true")
 
     p_status = sub.add_parser("status", help="Show task list + worker summary.")
-    p_status.add_argument("--dry-run", action="store_true", help="Print orca commands without executing.")
+    p_status.add_argument("--dry-run", action="store_true")
 
-    p_send = sub.add_parser("send", help="Send a message to a dispatched worker.")
-    p_send.add_argument("--dispatch", required=True, help="Dispatch ID to target.")
-    p_send.add_argument("--body", required=True, help="Message body text.")
-    p_send.add_argument("--dry-run", action="store_true", help="Print orca commands without executing.")
+    p_send = sub.add_parser("send", help="Send a follow-up to a dispatched worker.")
+    p_send.add_argument("--dispatch", required=True)
+    p_send.add_argument("--body", required=True)
+    p_send.add_argument("--dry-run", action="store_true")
 
     args = parser.parse_args()
-
-    if args.command == "run":
-        return cmd_run(args)
-    elif args.command == "status":
-        return cmd_status(args)
-    elif args.command == "send":
-        return cmd_send(args)
-    else:
-        parser.print_help()
-        return 1
+    return {"run": cmd_run, "wait": cmd_wait,
+            "status": cmd_status, "send": cmd_send}[args.command](args)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(orca *)",
+      "Bash(pi *)",
       "Bash(python3 tools/*)",
       "Bash(.venv/bin/python *)",
       "Bash(make *)",
@@ -34,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; case \"$f\" in */src/*.py|*/tests/*.py) cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(.venv/bin/python -m pytest -q -x 2>&1) || { printf '%s\\n' \"$out\" | tail -20 >&2; exit 2; } ;; esac; }",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; case \"$f\" in */src/*.py|*/tests/*.py|src/*.py|tests/*.py) cd \"${CLAUDE_PROJECT_DIR:-.}\" && out=$(.venv/bin/python -m pytest -q -x 2>&1) || { printf '%s\\n' \"$out\" | tail -20 >&2; exit 2; } ;; esac; }",
             "timeout": 90,
             "statusMessage": "Test gate: pytest on code edit"
           }

@@ -82,6 +82,24 @@ def json_parse(path: str) -> dict:
             "detail": f"{path}: envelope missing keys {missing_keys}",
         }
 
+    problems = []
+    if data["status"] not in ("succeeded", "failed"):
+        problems.append(f"status must be 'succeeded' or 'failed', got {data['status']!r}")
+    if not isinstance(data["summary"], str) or not data["summary"].strip():
+        problems.append("summary must be a non-empty string")
+    if not isinstance(data["changed_files"], list) or not all(
+        isinstance(p, str) for p in data["changed_files"]
+    ):
+        problems.append("changed_files must be a list of strings")
+    if problems:
+        return {"gate": "json_parse", "pass": False, "detail": f"{path}: {'; '.join(problems)}"}
+    if data["status"] == "failed":
+        return {
+            "gate": "json_parse",
+            "pass": False,
+            "detail": f"{path}: well-formed envelope but status=failed: {data['summary'][:200]}",
+        }
+
     return {"gate": "json_parse", "pass": True, "detail": f"{path}: valid envelope"}
 
 

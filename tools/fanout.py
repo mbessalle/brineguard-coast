@@ -30,7 +30,9 @@ from openrouter_call import request  # noqa: E402
 CONFIG = Path(__file__).parent.parent / "sssf.config.yaml"
 _DEFAULT_ROUTES = ["builder", "scout", "reviewer_independent", "documenter"]
 _SKIP_BACKENDS = {"session", "codex-cli"}
-_READ_ONLY_BACKENDS = {"openrouter-api", "pi-openrouter"}
+# pi-openai-codex is called one-shot with --no-tools (read-only guarantee holds)
+_READ_ONLY_BACKENDS = {"openrouter-api", "pi-openrouter", "pi-openai-codex"}
+_PI_ONESHOT_BACKENDS = {"pi-openai-codex"}
 
 # ---- helpers ----------------------------------------------------------------
 
@@ -85,8 +87,40 @@ def _resolve_targets(route_names: list[str], config: dict) -> list[dict]:
 
 # ---- single-route call ------------------------------------------------------
 
-def _call_route(target: dict, prompt: str, system: str | None) -> dict:
-    """Call OpenRouter chat API for one route. Returns result dict."""
+def _call_pi_oneshot(target: dict, prompt: str, system: str | None,
+                     timeout: int) -> dict:
+    """One-shot chat via pi subscription CLI (no tools, no session). Fast-recipe
+    flags verified 2026-08-25: without --thinking low --no-extensions the call
+    exceeded 3 minutes; with them ~20s."""
+    import subprocess
+    model = target["model"]
+    full_prompt = (f"{system}\n\n{prompt}" if system else prompt)
+    start = time.monotonic()
+    argv = ["pi", "--provider", "openai-codex", "--model", model,
+            "--thinking", "low", "--no-extensions", "-p", "--no-session",
+            "--no-tools", full_prompt]
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        if proc.returncode != 0:
+            raise RuntimeError(f"pi exit {proc.returncode}: {proc.stderr[-200:]}")
+        text = proc.stdout.strip()
+    except Exception as exc:
+        return {"status": "FAIL", "latency": round(time.monotonic() - start, 1),
+                "error": str(exc)[:200], "text": "", "est_cost": 0,
+                "prompt_chars": len(full_prompt), "response_chars": 0,
+                "actual_model": model}
+    return {"status": "PASS", "text": text,
+            "latency": round(time.monotonic() - start, 1),
+            "est_cost": 0.0,  # subscription: no marginal cost
+            "prompt_chars": len(full_prompt), "response_chars": len(text),
+            "actual_model": model}
+
+
+def _call_route(target: dict, prompt: str, system: str | None,
+                timeout: int = 180) -> dict:
+    """Call one route (OpenRouter chat API, or pi one-shot). Returns result dict."""
+    if target["config"].get("backend") in _PI_ONESHOT_BACKENDS:
+        return _call_pi_oneshot(target, prompt, system, timeout)
     model = target["model"]
     messages = []
     prompt_chars = len(prompt)
@@ -104,7 +138,7 @@ def _call_route(target: dict, prompt: str, system: str | None) -> dict:
         actual_model = result.get("model", model)
     except Exception as exc:
         return {"status": "FAIL", "latency": round(time.monotonic() - start, 1),
-                "error": str(exc)[:120], "text": "", "est_cost": 0,
+                "error": str(exc)[:200], "text": "", "est_cost": 0,
                 "prompt_chars": prompt_chars, "response_chars": 0,
                 "actual_model": model}
 
@@ -112,8 +146,14 @@ def _call_route(target: dict, prompt: str, system: str | None) -> dict:
     est = 0.0
     in_price = cfg.get("usd_per_m_in", 0)
     out_price = cfg.get("usd_per_m_out", 0)
+    usage = result.get("usage") or {}
+    in_tok = usage.get("prompt_tokens")
+    out_tok = usage.get("completion_tokens")
     if in_price or out_price:
-        est = (prompt_chars / 4.0 / 1e6 * in_price) + (response_chars / 4.0 / 1e6 * out_price)
+        if in_tok is not None and out_tok is not None:  # real usage from the API
+            est = (in_tok / 1e6 * in_price) + (out_tok / 1e6 * out_price)
+        else:  # chars/4 fallback estimate
+            est = (prompt_chars / 4.0 / 1e6 * in_price) + (response_chars / 4.0 / 1e6 * out_price)
     return {"status": "PASS", "text": text, "latency": latency,
             "est_cost": round(est, 6), "prompt_chars": prompt_chars,
             "response_chars": response_chars, "actual_model": actual_model}
@@ -141,8 +181,9 @@ def main() -> None:
     route_names = [r.strip() for r in args.routes.split(",") if r.strip()]
     targets = _resolve_targets(route_names, config)
 
+    import uuid
     out_dir = Path(args.out) if args.out else Path(
-        f"adw_data/fanout/{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        f"adw_data/fanout/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}")
     if not args.dry_run:
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -153,21 +194,39 @@ def main() -> None:
         print("(no API calls made)")
         sys.exit(0)
 
+    if not targets:
+        print("FAIL: no callable routes after resolution (all skipped or unknown)")
+        sys.exit(1)
+
     results: list[dict] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(targets)) as pool:
-        futs = {pool.submit(_call_route, t, prompt, system): t for t in targets}
-        for fut in concurrent.futures.as_completed(futs):
+        futs = {pool.submit(_call_route, t, prompt, system, args.timeout): t
+                for t in targets}
+        # Global deadline: unfinished futures after --timeout become FAILs
+        # instead of blocking the whole fan-in on one hung route.
+        done, not_done = concurrent.futures.wait(futs, timeout=args.timeout + 10)
+        for fut in done:
             t = futs[fut]
             try:
-                r = fut.result(timeout=args.timeout + 5)
-            except concurrent.futures.TimeoutError:
-                r = {"status": "FAIL", "latency": args.timeout, "error": "timeout",
+                r = fut.result()
+            except Exception as exc:
+                r = {"status": "FAIL", "latency": args.timeout,
+                     "error": f"worker exception: {exc}"[:200],
                      "text": "", "est_cost": 0, "prompt_chars": len(prompt),
                      "response_chars": 0, "actual_model": t["model"]}
-            r["alias"] = t["alias"]
-            r["route"] = t["route"]
-            r["model_cfg"] = t["model"]
+            r.update(alias=t["alias"], route=t["route"], model_cfg=t["model"])
             results.append(r)
+        for fut in not_done:
+            fut.cancel()
+            t = futs[fut]
+            results.append({"status": "FAIL", "latency": args.timeout,
+                            "error": "deadline exceeded (route hung)", "text": "",
+                            "est_cost": 0, "prompt_chars": len(prompt),
+                            "response_chars": 0, "actual_model": t["model"],
+                            "alias": t["alias"], "route": t["route"],
+                            "model_cfg": t["model"]})
+        if not_done:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     # Sort for stable output
     results.sort(key=lambda r: r["alias"])
@@ -179,7 +238,9 @@ def main() -> None:
 
     for r in results:
         fname = _sanitize(r["alias"]) + ".md"
-        content = f"# {r['alias']}\n\n{r['text']}".strip() + "\n"
+        body = r["text"] if r["status"] == "PASS" else (
+            f"STATUS: FAIL\nERROR: {r.get('error', 'unknown')}")
+        content = f"# {r['alias']}\n\n{body}".strip() + "\n"
         (out_dir / fname).write_text(content, encoding="utf-8")
 
         agg_parts.append(content)
@@ -191,6 +252,8 @@ def main() -> None:
             "alias": r["alias"],
             "route": r["route"],
             "model": r.get("actual_model", r.get("model_cfg", "")),
+            "status": r["status"],
+            "error": r.get("error"),
             "latency_s": r["latency"],
             "est_cost_usd": r["est_cost"],
         })
