@@ -54,45 +54,17 @@ Follow this plan exactly. Make the file edits it describes.
 When done, summarize what changed.
 """
 
-RETRY_CONTEXT_TEMPLATE = """
-The previous attempt failed the deterministic quality gate. Fix ONLY what is
-needed to make the gate pass; do not change the plan's scope.
-
---- GATE FAILURE OUTPUT (attempt {attempt}) ---
-{gate_output}
---- END GATE FAILURE OUTPUT ---
-"""
-
-
-def _git_diff_files() -> list[str]:
-    try:
-        proc = subprocess.run(
-            ["git", "diff", "--name-only", "HEAD"],
-            cwd=adw_common.REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
-    if proc.returncode != 0:
-        return []
-    return [line for line in proc.stdout.splitlines() if line]
-
 
 def run(request: str, *, dry_run: bool, commit: bool) -> int:
     config = adw_common.load_config()
     planner_model = adw_common.model_for_role(config, "planner")
-    builder_model = adw_common.route_model(config, "builder")
-    max_retries = config["routing"]["retry_policy"]["max_builder_retries"]
 
     session_id = adw_common.new_session_id()
     logger = adw_common.PhaseLogger(session_id)
     handoff = adw_common.handoff_dir(session_id)
-    logger.info(f"session_id={session_id} max_builder_retries={max_retries}")
+    logger.info(f"session_id={session_id}")
 
     # --- Phase 1: Planner (Tier 1) ---
-    planner_model = adw_common.model_for_role(config, "planner")
     logger.phase_start("planner", "planner", planner_model)
     ok, plan_text = adw_common.run_claude(
         PLANNER_PROMPT_TEMPLATE.format(request=request),
@@ -106,69 +78,42 @@ def run(request: str, *, dry_run: bool, commit: bool) -> int:
     adw_common.write_text(plan_path, plan_text)
     adw_common.write_envelope(
         plan_json_path,
-        status="dry-run" if dry_run else ("ok" if ok else "error"),
+        status="succeeded" if (dry_run or ok) else "failed",
         summary=f"plan for: {request}",
         changed_files=[],
     )
-    logger.phase_end("planner", dry_run or ok)
-    if not dry_run and not ok:
-        logger.info("planner phase failed; aborting before builder")
+    # Validate planner envelope BEFORE proceeding
+    plan_gate = gates.json_parse(str(plan_json_path))
+    logger.gate_result(plan_gate)
+    logger.phase_end("planner", plan_gate["pass"])
+    if not plan_gate["pass"]:
+        logger.info("planner envelope gate failed; aborting")
         return 1
 
-    # --- Phase 2: Builder (Tier 2) with bounded retry ---
-    attempt = 0
-    gate_result: dict = {}
-    while True:
-        attempt += 1
-        logger.phase_start(f"builder(attempt {attempt})", "builder", builder_model)
+    # --- Phase 2: Builder (Tier 2) with retry ladder ---
+    rc, builder_output, total_attempts = adw_common.retry_ladder(
+        "builder",
+        BUILDER_PROMPT_TEMPLATE,
+        plan_text=plan_text,
+        dry_run=dry_run,
+        logger=logger,
+        handoff=handoff,
+        config=config,
+    )
+    if dry_run:
+        return 0
+    if rc != 0:
+        escalation = {
+            "status": "failed",
+            "summary": f"builder exhausted all rungs after {total_attempts} attempts; see escalation.json",
+            "changed_files": adw_common._git_diff_files(),
+            "total_attempts": total_attempts,
+        }
+        (handoff / "escalation.json").write_text(json.dumps(escalation, indent=2, default=str))
+        logger.info(f"builder failed after {total_attempts} attempt(s); escalation written")
+        return 1
 
-        retry_context = ""
-        if attempt > 1:
-            retry_context = RETRY_CONTEXT_TEMPLATE.format(
-                attempt=attempt - 1, gate_output=json.dumps(gate_result, indent=2, default=str)
-            )
-        builder_prompt = BUILDER_PROMPT_TEMPLATE.format(plan=plan_text, retry_context=retry_context)
-
-        ok, builder_output = adw_common.run_route("builder", builder_prompt, dry_run=dry_run, logger=logger)
-        envelope_path = handoff / "envelope.json"
-        changed_files = [] if dry_run else _git_diff_files()
-        adw_common.write_envelope(
-            envelope_path,
-            status="dry-run" if dry_run else ("ok" if ok else "error"),
-            summary=f"builder attempt {attempt} for: {request}",
-            changed_files=changed_files,
-            commit_message=f"{request} (session {session_id}, attempt {attempt})",
-        )
-        logger.phase_end(f"builder(attempt {attempt})", dry_run or ok)
-
-        # --- Phase 3: Deterministic gate (Tier 3) ---
-        if dry_run:
-            logger.info("[dry-run] would run: adws/gates.py quality")
-            logger.info("[dry-run] skipping retry loop and commit; plan/build phases printed above")
-            return 0
-
-        gate_result = gates.code_quality()
-        (handoff / "gate_results.json").write_text(json.dumps(gate_result, indent=2, default=str))
-        (handoff / "test_log.txt").write_text(json.dumps(gate_result.get("detail", {}), indent=2, default=str))
-        logger.gate_result(gate_result)
-
-        if gate_result["pass"]:
-            break
-
-        if attempt >= max_retries:
-            escalation = {
-                "status": "escalated",
-                "summary": f"builder exhausted {max_retries} retries; escalating to planner",
-                "changed_files": changed_files,
-                "last_gate_result": gate_result,
-            }
-            (handoff / "escalation.json").write_text(json.dumps(escalation, indent=2, default=str))
-            logger.info(f"retries exhausted ({attempt}/{max_retries}); escalating to planner (see escalation.json)")
-            return 1
-
-        logger.info(f"gate failed on attempt {attempt}/{max_retries}; retrying builder with gate output")
-
-    # --- Phase 4: git commit (Tier 3, deterministic) ---
+    # --- Phase 3: git commit (Tier 3, deterministic) ---
     if commit:
         logger.phase_start("git_commit", "git_commit", "n/a (deterministic)")
         subprocess.run(["git", "add", "-A"], cwd=adw_common.REPO_ROOT, check=False)
@@ -181,7 +126,7 @@ def run(request: str, *, dry_run: bool, commit: bool) -> int:
     else:
         logger.info("commit skipped (--no-commit); changes left staged in working tree")
 
-    logger.info(f"adw_plan_build_test succeeded in {attempt} attempt(s)")
+    logger.info(f"adw_plan_build_test succeeded in {total_attempts} attempt(s)")
     return 0
 
 
