@@ -1,0 +1,7 @@
+{
+  "run_id": "ensemble",
+  "created_utc": "2026-08-25T11:26:17.190264+00:00",
+  "git_revision": "609b5b34a3d1441262e34ee00558d0be457b70e8",
+  "config": "/home/mbessalle/water-innovation-project/configs/phase3_tidal.yaml",
+  "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734"
+}

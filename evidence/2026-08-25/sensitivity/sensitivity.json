@@ -1,0 +1,147 @@
+{
+  "config": "/home/mbessalle/water-innovation-project/configs/phase3.yaml",
+  "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+  "run_id": "sensitivity",
+  "pareto_frontier": [
+    {
+      "cost_cap": 32035.63,
+      "energy_cost": 32035.63,
+      "exposure_sum": 8388.994935727493,
+      "feasible": true
+    },
+    {
+      "cost_cap": 31581.968095238095,
+      "energy_cost": 31581.9680952381,
+      "exposure_sum": 8449.342807593235,
+      "feasible": true
+    },
+    {
+      "cost_cap": 31128.306190476193,
+      "energy_cost": 31128.306190476193,
+      "exposure_sum": 8532.592019101625,
+      "feasible": true
+    },
+    {
+      "cost_cap": 30674.644285714287,
+      "energy_cost": 30674.644285714287,
+      "exposure_sum": 8742.917921566795,
+      "feasible": true
+    },
+    {
+      "cost_cap": 30220.98238095238,
+      "energy_cost": 30220.982380952377,
+      "exposure_sum": 9124.248932255006,
+      "feasible": true
+    },
+    {
+      "cost_cap": 29767.320476190474,
+      "energy_cost": 29767.320476190467,
+      "exposure_sum": 9557.830489387441,
+      "feasible": true
+    },
+    {
+      "cost_cap": 29313.658571428572,
+      "energy_cost": 29313.65857142857,
+      "exposure_sum": 10120.901389542767,
+      "feasible": true
+    },
+    {
+      "cost_cap": 28859.996666666666,
+      "energy_cost": 28859.996666666666,
+      "exposure_sum": 11538.415158490043,
+      "feasible": true
+    }
+  ],
+  "sensitivity_sweep": [
+    {
+      "axis": "storage_scale",
+      "value": 0.5,
+      "benefit": 0.17863732220913317,
+      "exposure_B": 10779.393957317248,
+      "exposure_C": 8853.791885744784,
+      "energy_cost_B": 32475.496666666666,
+      "feasible": true
+    },
+    {
+      "axis": "storage_scale",
+      "value": 1.0,
+      "benefit": 0.18596667963365382,
+      "exposure_B": 10305.46873923063,
+      "exposure_C": 8388.994935727493,
+      "energy_cost_B": 32717.37611111111,
+      "feasible": true
+    },
+    {
+      "axis": "storage_scale",
+      "value": 1.5,
+      "benefit": 0.19195441174026498,
+      "exposure_B": 9880.463782267396,
+      "exposure_C": 7983.865169221264,
+      "energy_cost_B": 32863.46444444444,
+      "feasible": true
+    },
+    {
+      "axis": "storage_scale",
+      "value": 2.0,
+      "benefit": 0.19278966777110276,
+      "exposure_B": 9517.070170581846,
+      "exposure_C": 7682.2773742411,
+      "energy_cost_B": 32715.26262962963,
+      "feasible": true
+    },
+    {
+      "axis": "turndown",
+      "value": 0.05,
+      "benefit": 0.0063727035253263046,
+      "exposure_B": 11205.350684715986,
+      "exposure_C": 11133.942306904979,
+      "energy_cost_B": 31576.730370370376,
+      "feasible": true
+    },
+    {
+      "axis": "turndown",
+      "value": 0.1,
+      "benefit": 0.013256725173609863,
+      "exposure_B": 10918.009610234387,
+      "exposure_C": 10773.272557388678,
+      "energy_cost_B": 31579.980703703703,
+      "feasible": true
+    },
+    {
+      "axis": "turndown",
+      "value": 0.2,
+      "benefit": 0.05283324015679405,
+      "exposure_B": 10555.108725853574,
+      "exposure_C": 9997.44813165948,
+      "energy_cost_B": 32269.557925925925,
+      "feasible": true
+    },
+    {
+      "axis": "dispersion_scale",
+      "value": 0.5,
+      "benefit": 0.23964870103172414,
+      "exposure_B": 13978.155659340036,
+      "exposure_C": 10628.308812759953,
+      "energy_cost_B": 32642.562777777777,
+      "feasible": true
+    },
+    {
+      "axis": "dispersion_scale",
+      "value": 1.0,
+      "benefit": 0.18596667963365382,
+      "exposure_B": 10305.46873923063,
+      "exposure_C": 8388.994935727493,
+      "energy_cost_B": 32717.37611111111,
+      "feasible": true
+    },
+    {
+      "axis": "dispersion_scale",
+      "value": 2.0,
+      "benefit": 0.1408780077200657,
+      "exposure_B": 7936.097510324047,
+      "exposure_C": 6818.075903997422,
+      "energy_cost_B": 32717.634444444444,
+      "feasible": true
+    }
+  ]
+}

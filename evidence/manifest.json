@@ -1,0 +1,38 @@
+{
+  "created_utc": "2026-08-25T11:26:21.591594+00:00",
+  "git_revision": "609b5b34a3d1441262e34ee00558d0be457b70e8",
+  "dirty_tree": false,
+  "config_sha256s": {
+    "configs/phase3.yaml": "2b9f2c3450a8c71ba9ec0f5bc9622a5f25013a5920dff2904d40d295aa83679e",
+    "configs/phase3_tidal.yaml": "a5a1971777747dc9ce6cd72a3e678f7b333672f0e30c2da1ff1ea93722cc1d4e",
+    "configs/hybrid_redsea_full.yaml": "58db8158ed01dfb7cee45e342695829256a812a805669be62f22188048f2f298"
+  },
+  "artifact_sha256s": {
+    "benchmark/comparison.csv": "a9b80b583919a7e1dfae5f4217693b5efb3c4ba6f0490ecf6be9519d72a98ac7",
+    "benchmark/comparison.json": "8d13c5803a0025adf4baa27095e921556e105c84053f8e9f1f0ad4c165b18a81",
+    "benchmark/figures/coordination_benefit.png": "a4b2f6e8ef3c871377837083a7da35c2dc72197b8da9cc83537375ab9b537e4a",
+    "benchmark/manifest.json": "4eefaed78f1abbe2dc8d1165eab1a0470907b207027c92b0ba570be09969171a",
+    "ensemble/ensemble.json": "6a74289b2bf311914bf23fad00f26d5c3d77a2604913afe5bd743c999e986e01",
+    "ensemble/figures/uncertainty_intervals.png": "bdddd097c85d03584f34f277bf2f4d844f43f6a2894e88e15d2e81a9e87b45f2",
+    "ensemble/manifest.json": "ec41b827f2880b5db13792ce618e64b5538f65d09f2d6c55b4b2ed2562378887",
+    "sensitivity/figures/pareto_frontier.png": "844b1160680d8c73c33ec2fccba7d2a0dcb46877860c01d98aac42f064f3a470",
+    "sensitivity/figures/sensitivity_benefit.png": "5fd23b672dc2f418e9371a4b5509c5a3d9164c3069d2147db3468e68625b4123",
+    "sensitivity/manifest.json": "d35319e3cfe6fb73f8e2200aab1a2dd23120048e1e78fa07203cc1810990d9e0",
+    "sensitivity/sensitivity.json": "cca449dc07f4040338d9dab34d539d2c866482d4e6dd54a2af21642bc76618ac"
+  },
+  "tool_versions": {
+    "python": "3.14.4",
+    "numpy": "2.5.2",
+    "pyomo": "6.10.1"
+  },
+  "pending_configs": [],
+  "benchmark_configs": [
+    "configs/phase3.yaml",
+    "configs/phase3_tidal.yaml",
+    "configs/hybrid_redsea_full.yaml"
+  ],
+  "ensemble_config_path": "configs/phase3_tidal.yaml",
+  "ensemble_n_members": 20,
+  "sensitivity_config_path": "configs/phase3.yaml",
+  "sensitivity_n_points": 8
+}

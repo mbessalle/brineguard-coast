@@ -1,0 +1,15 @@
+{
+  "run_id": "benchmark",
+  "created_utc": "2026-08-25T11:26:13.646115+00:00",
+  "git_revision": "609b5b34a3d1441262e34ee00558d0be457b70e8",
+  "configs": [
+    "/home/mbessalle/water-innovation-project/configs/phase3.yaml",
+    "/home/mbessalle/water-innovation-project/configs/phase3_tidal.yaml",
+    "/home/mbessalle/water-innovation-project/configs/hybrid_redsea_full.yaml"
+  ],
+  "flex_scenarios": [
+    "flex1",
+    "flex2",
+    "flex4"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "run_id": "sensitivity",
+  "created_utc": "2026-08-25T11:26:21.583851+00:00",
+  "git_revision": "609b5b34a3d1441262e34ee00558d0be457b70e8",
+  "config": "/home/mbessalle/water-innovation-project/configs/phase3.yaml",
+  "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2"
+}

@@ -1,0 +1,990 @@
+{
+  "cells": {
+    "phase3/flex1": {
+      "config": "/home/mbessalle/water-innovation-project/configs/phase3.yaml",
+      "flex": "flex1",
+      "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+      "strategies": {
+        "A": {
+          "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+          "strategy": "A",
+          "energy_cost": 31576.730370370376,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428
+        },
+        "B_capacity": {
+          "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428
+        },
+        "B_cost": {
+          "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428
+        },
+        "C": {
+          "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428
+        },
+        "C_matched_capacity": {
+          "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+          "strategy": "C_matched",
+          "cost_cap": 31576.730370370373,
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428,
+          "coordination_benefit": 0.0,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "3bed040035caee44e804dbee475e357ec6e0bec302599cec1f55840ca7d56366",
+          "strategy": "C_matched",
+          "cost_cap": 31576.730370370373,
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428,
+          "coordination_benefit": 0.0,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 1.0,
+            "plant_1": 1.0,
+            "plant_2": 1.0
+          },
+          "between_plant_sync_B": 0.0,
+          "between_plant_sync_C": 0.0,
+          "overlap_contribution_B_m2_kg_m3_h": 76.82332279920229,
+          "overlap_contribution_C_m2_kg_m3_h": 76.82332279920229,
+          "single_source_exposures_B": [
+            4306.877633338441,
+            5588.33619160709,
+            1521.62019667308
+          ],
+          "single_source_exposures_C": [
+            4306.877633338441,
+            5588.33619160709,
+            1521.62019667308
+          ]
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 1.0,
+            "plant_1": 1.0,
+            "plant_2": 1.0
+          },
+          "between_plant_sync_B": 0.0,
+          "between_plant_sync_C": 0.0,
+          "overlap_contribution_B_m2_kg_m3_h": 76.82332279920229,
+          "overlap_contribution_C_m2_kg_m3_h": 76.82332279920229,
+          "single_source_exposures_B": [
+            4306.877633338441,
+            5588.33619160709,
+            1521.62019667308
+          ],
+          "single_source_exposures_C": [
+            4306.877633338441,
+            5588.33619160709,
+            1521.62019667308
+          ]
+        }
+      }
+    },
+    "phase3/flex2": {
+      "config": "/home/mbessalle/water-innovation-project/configs/phase3.yaml",
+      "flex": "flex2",
+      "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+      "strategies": {
+        "A": {
+          "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+          "strategy": "A",
+          "energy_cost": 31576.73037037037,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428
+        },
+        "B_capacity": {
+          "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 31579.980703703703,
+          "water_produced_m3": 14299.999999999996,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10918.009610234387,
+          "peak_anomaly_kg_m3": 0.0006055321078423876
+        },
+        "B_cost": {
+          "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 31613.60174224482,
+          "water_produced_m3": 14299.999999999998,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10896.919954351462,
+          "peak_anomaly_kg_m3": 0.0006094367452751756
+        },
+        "C": {
+          "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 31777.711574074077,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10745.155017592158,
+          "peak_anomaly_kg_m3": 0.0005779184590857472
+        },
+        "C_matched_capacity": {
+          "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+          "strategy": "C_matched",
+          "cost_cap": 31579.980703703703,
+          "energy_cost": 31579.980703703684,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10773.272557388678,
+          "peak_anomaly_kg_m3": 0.000576685916777909,
+          "coordination_benefit": 0.013256725173609863,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "1686326ab9458109ebc5ba27df9ae8907f3b3c966420dd7ace596154b8748242",
+          "strategy": "C_matched",
+          "cost_cap": 31613.60174224482,
+          "energy_cost": 31613.6017422448,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10764.201610723907,
+          "peak_anomaly_kg_m3": 0.0005752899838320306,
+          "coordination_benefit": 0.012179436408042723,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.652629758898419,
+            "plant_1": 0.6856949852652922,
+            "plant_2": 0.3518100645868358
+          },
+          "between_plant_sync_B": 0.9999999999999999,
+          "between_plant_sync_C": 0.4689868613065154,
+          "overlap_contribution_B_m2_kg_m3_h": 75.56497172160198,
+          "overlap_contribution_C_m2_kg_m3_h": 75.74303840742868,
+          "single_source_exposures_B": [
+            4134.964721973205,
+            5310.565050141522,
+            1396.9148663980575
+          ],
+          "single_source_exposures_C": [
+            3950.4246779586474,
+            5122.0320116695475,
+            1596.955289556534
+          ]
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.781220262318853,
+            "plant_1": 0.6386789547760859,
+            "plant_2": 0.3837909209334892
+          },
+          "between_plant_sync_B": 0.8647525108860229,
+          "between_plant_sync_C": 0.4689868613065154,
+          "overlap_contribution_B_m2_kg_m3_h": 75.56408177414778,
+          "overlap_contribution_C_m2_kg_m3_h": 75.74303840742868,
+          "single_source_exposures_B": [
+            4044.1896836007804,
+            5369.323015573625,
+            1407.8431734029102
+          ],
+          "single_source_exposures_C": [
+            3950.4246779586474,
+            5122.0320116695475,
+            1596.955289556534
+          ]
+        }
+      }
+    },
+    "phase3/flex4": {
+      "config": "/home/mbessalle/water-innovation-project/configs/phase3.yaml",
+      "flex": "flex4",
+      "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+      "strategies": {
+        "A": {
+          "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+          "strategy": "A",
+          "energy_cost": 31576.730370370376,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 11493.657344417814,
+          "peak_anomaly_kg_m3": 0.0005717471730122428
+        },
+        "B_capacity": {
+          "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 32717.37611111111,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10305.46873923063,
+          "peak_anomaly_kg_m3": 0.0006009100376411736
+        },
+        "B_cost": {
+          "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 32611.329599141565,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10525.248257305555,
+          "peak_anomaly_kg_m3": 0.0006957338566966073
+        },
+        "C": {
+          "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 32035.63,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 8388.994935727493,
+          "peak_anomaly_kg_m3": 0.0005875164277916388
+        },
+        "C_matched_capacity": {
+          "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+          "strategy": "C_matched",
+          "cost_cap": 32717.37611111111,
+          "energy_cost": 32035.63,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 8388.994935727493,
+          "peak_anomaly_kg_m3": 0.0005875164277916388,
+          "coordination_benefit": 0.18596667963365382,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "ddb5090f3adef8caf018429d1f819c5e2b8708c1e0092ddd46d6543d4ac53da2",
+          "strategy": "C_matched",
+          "cost_cap": 32611.329599141565,
+          "energy_cost": 32035.63,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 8388.994935727493,
+          "peak_anomaly_kg_m3": 0.0005875164277916388,
+          "coordination_benefit": 0.2029646493226697,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.5272979527587107,
+            "plant_1": 0.6182973051853192,
+            "plant_2": 0.16424802370632957
+          },
+          "between_plant_sync_B": 0.9939306110530318,
+          "between_plant_sync_C": 0.04613504084125262,
+          "overlap_contribution_B_m2_kg_m3_h": 70.37901191126912,
+          "overlap_contribution_C_m2_kg_m3_h": 72.02190438616526,
+          "single_source_exposures_B": [
+            3935.7851175586056,
+            4998.813416416687,
+            1300.4911933440683
+          ],
+          "single_source_exposures_C": [
+            2763.6103801919485,
+            3254.5565510915867,
+            2298.8061000577927
+          ]
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.4901507800826003,
+            "plant_1": 0.5483343124180097,
+            "plant_2": 0.148949407161457
+          },
+          "between_plant_sync_B": 0.816004473047231,
+          "between_plant_sync_C": 0.04613504084125262,
+          "overlap_contribution_B_m2_kg_m3_h": 70.10332860279414,
+          "overlap_contribution_C_m2_kg_m3_h": 72.02190438616526,
+          "single_source_exposures_B": [
+            3449.14402342419,
+            5744.21773353719,
+            1261.7831717413806
+          ],
+          "single_source_exposures_C": [
+            2763.6103801919485,
+            3254.5565510915867,
+            2298.8061000577927
+          ]
+        }
+      }
+    },
+    "phase3_tidal/flex1": {
+      "config": "/home/mbessalle/water-innovation-project/configs/phase3_tidal.yaml",
+      "flex": "flex1",
+      "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+      "strategies": {
+        "A": {
+          "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+          "strategy": "A",
+          "energy_cost": 31576.730370370376,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303
+        },
+        "B_capacity": {
+          "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303
+        },
+        "B_cost": {
+          "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303
+        },
+        "C": {
+          "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303
+        },
+        "C_matched_capacity": {
+          "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+          "strategy": "C_matched",
+          "cost_cap": 31576.730370370373,
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303,
+          "coordination_benefit": 0.0,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "8f24af1818bc36f067f2a48d126cb687b14410ced2b5d01b8b634fd166f62638",
+          "strategy": "C_matched",
+          "cost_cap": 31576.730370370373,
+          "energy_cost": 31576.730370370373,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303,
+          "coordination_benefit": 0.0,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 1.0,
+            "plant_1": 1.0,
+            "plant_2": 1.0
+          },
+          "between_plant_sync_B": 0.0,
+          "between_plant_sync_C": 0.0,
+          "overlap_contribution_B_m2_kg_m3_h": 71.88243584651718,
+          "overlap_contribution_C_m2_kg_m3_h": 71.88243584651718,
+          "single_source_exposures_B": [
+            4070.257986962884,
+            4978.993479811463,
+            1232.2178630830626
+          ],
+          "single_source_exposures_C": [
+            4070.257986962884,
+            4978.993479811463,
+            1232.2178630830626
+          ],
+          "poor_flushing_fraction_B": 0.4375,
+          "poor_flushing_fraction_C": 0.4375
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 1.0,
+            "plant_1": 1.0,
+            "plant_2": 1.0
+          },
+          "between_plant_sync_B": 0.0,
+          "between_plant_sync_C": 0.0,
+          "overlap_contribution_B_m2_kg_m3_h": 71.88243584651718,
+          "overlap_contribution_C_m2_kg_m3_h": 71.88243584651718,
+          "single_source_exposures_B": [
+            4070.257986962884,
+            4978.993479811463,
+            1232.2178630830626
+          ],
+          "single_source_exposures_C": [
+            4070.257986962884,
+            4978.993479811463,
+            1232.2178630830626
+          ],
+          "poor_flushing_fraction_B": 0.4375,
+          "poor_flushing_fraction_C": 0.4375
+        }
+      }
+    },
+    "phase3_tidal/flex2": {
+      "config": "/home/mbessalle/water-innovation-project/configs/phase3_tidal.yaml",
+      "flex": "flex2",
+      "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+      "strategies": {
+        "A": {
+          "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+          "strategy": "A",
+          "energy_cost": 31576.73037037037,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303
+        },
+        "B_capacity": {
+          "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 31614.677592592587,
+          "water_produced_m3": 14299.999999999996,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9774.87229613808,
+          "peak_anomaly_kg_m3": 0.0006583866224015038
+        },
+        "B_cost": {
+          "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 31613.713674935396,
+          "water_produced_m3": 14299.999999999998,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9762.796518603729,
+          "peak_anomaly_kg_m3": 0.0006647296446402136
+        },
+        "C": {
+          "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 31662.61378703704,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9625.384077115643,
+          "peak_anomaly_kg_m3": 0.0006104057957676172
+        },
+        "C_matched_capacity": {
+          "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+          "strategy": "C_matched",
+          "cost_cap": 31614.677592592587,
+          "energy_cost": 31614.677592592565,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9627.720659469524,
+          "peak_anomaly_kg_m3": 0.0006102278326572523,
+          "coordination_benefit": 0.01505407254544849,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "e5475c4ab9f6bf9a8b37e2f43746dab8b57cd7a2fbd5fcf9e858c9084df5a7bf",
+          "strategy": "C_matched",
+          "cost_cap": 31613.713674935396,
+          "energy_cost": 31613.713674935374,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9627.780071043655,
+          "peak_anomaly_kg_m3": 0.000610224625990626,
+          "coordination_benefit": 0.01382968981303567,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.5773502691896258,
+            "plant_1": 0.6741998624632423,
+            "plant_2": 0.27940512930011097
+          },
+          "between_plant_sync_B": 0.9548639026185443,
+          "between_plant_sync_C": 0.40005870078848943,
+          "overlap_contribution_B_m2_kg_m3_h": 70.71270436697705,
+          "overlap_contribution_C_m2_kg_m3_h": 71.03789424577008,
+          "single_source_exposures_B": [
+            3873.0660915913877,
+            4707.533384492432,
+            1123.5601156872842
+          ],
+          "single_source_exposures_C": [
+            3690.646791266926,
+            4551.1053046576435,
+            1312.5940869453027
+          ],
+          "poor_flushing_fraction_B": 0.43961489029868667,
+          "poor_flushing_fraction_C": 0.4425246550116002
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.7028915336758899,
+            "plant_1": 0.6190603804261696,
+            "plant_2": 0.30480410506039485
+          },
+          "between_plant_sync_B": 0.7899627594467753,
+          "between_plant_sync_C": 0.40005870078848943,
+          "overlap_contribution_B_m2_kg_m3_h": 70.70947871945646,
+          "overlap_contribution_C_m2_kg_m3_h": 71.03789424577008,
+          "single_source_exposures_B": [
+            3796.827695980882,
+            4763.090740864012,
+            1132.168603039378
+          ],
+          "single_source_exposures_C": [
+            3690.646791266926,
+            4551.1053046576435,
+            1312.5940869453027
+          ],
+          "poor_flushing_fraction_B": 0.4414446205665993,
+          "poor_flushing_fraction_C": 0.4425246550116002
+        }
+      }
+    },
+    "phase3_tidal/flex4": {
+      "config": "/home/mbessalle/water-innovation-project/configs/phase3_tidal.yaml",
+      "flex": "flex4",
+      "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+      "strategies": {
+        "A": {
+          "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+          "strategy": "A",
+          "energy_cost": 31576.730370370376,
+          "water_produced_m3": 14300.000000000002,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 10353.351765703927,
+          "peak_anomaly_kg_m3": 0.0006508868435388303
+        },
+        "B_capacity": {
+          "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 31504.39721693122,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9145.381354799449,
+          "peak_anomaly_kg_m3": 0.0006014295187733063
+        },
+        "B_cost": {
+          "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 31353.127866505758,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 9335.996402999186,
+          "peak_anomaly_kg_m3": 0.0006889356560119881
+        },
+        "C": {
+          "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 31733.215,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 7354.316695351567,
+          "peak_anomaly_kg_m3": 0.0004781899654321948
+        },
+        "C_matched_capacity": {
+          "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+          "strategy": "C_matched",
+          "cost_cap": 31504.39721693122,
+          "energy_cost": 31504.397216931215,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 7367.055542105923,
+          "peak_anomaly_kg_m3": 0.00048260944912038926,
+          "coordination_benefit": 0.1944507007091912,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "2d3414aafda8437aec905e5d6d10dea312b079fe8d58ac4aa3ca74b6205ff734",
+          "strategy": "C_matched",
+          "cost_cap": 31353.127866505758,
+          "energy_cost": 31353.127866505758,
+          "water_produced_m3": 14300.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 7384.538699159263,
+          "peak_anomaly_kg_m3": 0.0004816186836646243,
+          "coordination_benefit": 0.209025113078773,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.7084249846036189,
+            "plant_1": 0.6603479314099694,
+            "plant_2": 0.1655065106829311
+          },
+          "between_plant_sync_B": 0.5182302794807393,
+          "between_plant_sync_C": 0.18948740898249683,
+          "overlap_contribution_B_m2_kg_m3_h": 69.15232995522638,
+          "overlap_contribution_C_m2_kg_m3_h": 67.80995002145482,
+          "single_source_exposures_B": [
+            3617.495323766685,
+            4417.176963175078,
+            1041.5567379024592
+          ],
+          "single_source_exposures_C": [
+            2441.2334300752027,
+            2983.8655595397977,
+            1861.4077557151124
+          ],
+          "poor_flushing_fraction_B": 0.45454853341114954,
+          "poor_flushing_fraction_C": 0.45431091563359494
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.7467555142728824,
+            "plant_1": 0.6202108823450463,
+            "plant_2": 0.1477770840107626
+          },
+          "between_plant_sync_B": 0.4831514234479685,
+          "between_plant_sync_C": 0.18948740898249683,
+          "overlap_contribution_B_m2_kg_m3_h": 68.58077661799507,
+          "overlap_contribution_C_m2_kg_m3_h": 67.80995002145482,
+          "single_source_exposures_B": [
+            3151.9748846124567,
+            5103.205995957804,
+            1012.2347458109307
+          ],
+          "single_source_exposures_C": [
+            2441.2334300752027,
+            2983.8655595397977,
+            1861.4077557151124
+          ],
+          "poor_flushing_fraction_B": 0.44881268208818004,
+          "poor_flushing_fraction_C": 0.45431091563359494
+        }
+      }
+    },
+    "hybrid_redsea_full/flex1": {
+      "config": "/home/mbessalle/water-innovation-project/configs/hybrid_redsea_full.yaml",
+      "flex": "flex1",
+      "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+      "strategies": {
+        "A": {
+          "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+          "strategy": "A",
+          "energy_cost": 1925648.0481269842,
+          "water_produced_m3": 806395.9999999998,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248
+        },
+        "B_capacity": {
+          "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 1925648.0481269844,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248
+        },
+        "B_cost": {
+          "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 1925648.0481269844,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248
+        },
+        "C": {
+          "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 1925648.0481269842,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248
+        },
+        "C_matched_capacity": {
+          "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+          "strategy": "C_matched",
+          "cost_cap": 1925648.0481269844,
+          "energy_cost": 1925648.0481269842,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248,
+          "coordination_benefit": 0.0,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "b71184967cfce5923524ec95b6e19ae46ad8d8967e63e5284c1386efb271e8c6",
+          "strategy": "C_matched",
+          "cost_cap": 1925648.0481269844,
+          "energy_cost": 1925648.0481269842,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248,
+          "coordination_benefit": 0.0,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 1.0,
+            "plant_1": 1.0,
+            "plant_2": 1.0
+          },
+          "between_plant_sync_B": 0.3333333333333333,
+          "between_plant_sync_C": 0.3333333333333333,
+          "overlap_contribution_B_m2_kg_m3_h": 13.642799582820771,
+          "overlap_contribution_C_m2_kg_m3_h": 13.642799582820771,
+          "single_source_exposures_B": [
+            510.73851135937485,
+            1134.080214132974,
+            1004.6594452906013
+          ],
+          "single_source_exposures_C": [
+            510.73851135937485,
+            1134.080214132974,
+            1004.6594452906013
+          ],
+          "poor_flushing_fraction_B": 0.4375,
+          "poor_flushing_fraction_C": 0.4375
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 1.0,
+            "plant_1": 1.0,
+            "plant_2": 1.0
+          },
+          "between_plant_sync_B": 0.3333333333333333,
+          "between_plant_sync_C": 0.3333333333333333,
+          "overlap_contribution_B_m2_kg_m3_h": 13.642799582820771,
+          "overlap_contribution_C_m2_kg_m3_h": 13.642799582820771,
+          "single_source_exposures_B": [
+            510.73851135937485,
+            1134.080214132974,
+            1004.6594452906013
+          ],
+          "single_source_exposures_C": [
+            510.73851135937485,
+            1134.080214132974,
+            1004.6594452906013
+          ],
+          "poor_flushing_fraction_B": 0.4375,
+          "poor_flushing_fraction_C": 0.4375
+        }
+      }
+    },
+    "hybrid_redsea_full/flex2": {
+      "infeasible": true,
+      "reason": "flex transformation violates feasibility",
+      "config": "/home/mbessalle/water-innovation-project/configs/hybrid_redsea_full.yaml",
+      "flex": "flex2"
+    },
+    "hybrid_redsea_full/flex4": {
+      "config": "/home/mbessalle/water-innovation-project/configs/hybrid_redsea_full.yaml",
+      "flex": "flex4",
+      "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+      "strategies": {
+        "A": {
+          "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+          "strategy": "A",
+          "energy_cost": 1925648.0481269844,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2663.120970365771,
+          "peak_anomaly_kg_m3": 0.0002713802894307248
+        },
+        "B_capacity": {
+          "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+          "strategy": "B_capacity",
+          "rule": "capacity",
+          "energy_cost": 1994665.0297619046,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2189.657919252987,
+          "peak_anomaly_kg_m3": 0.0002472923638237061
+        },
+        "B_cost": {
+          "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+          "strategy": "B_cost",
+          "rule": "cost",
+          "energy_cost": 1969053.8639937807,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2245.330404880068,
+          "peak_anomaly_kg_m3": 0.00023542144670579904
+        },
+        "C": {
+          "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+          "strategy": "C",
+          "cost_cap": null,
+          "energy_cost": 1981477.9668333333,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2207.2458976684134,
+          "peak_anomaly_kg_m3": 0.0002400130331422115
+        },
+        "C_matched_capacity": {
+          "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+          "strategy": "C_matched",
+          "cost_cap": 1994665.0297619046,
+          "energy_cost": 1981477.9668333333,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2207.2458976684134,
+          "peak_anomaly_kg_m3": 0.0002400130331422115,
+          "coordination_benefit": -0.008032295026899228,
+          "benefit_null": false
+        },
+        "C_matched_cost": {
+          "config_sha256": "50f70455d7f567b0f948ab47eb3f0bf503fc5adbda202457b3184c21c50e3915",
+          "strategy": "C_matched",
+          "cost_cap": 1969053.8639937807,
+          "energy_cost": 1969053.8639937807,
+          "water_produced_m3": 806396.0,
+          "audit_pass": true,
+          "audit_violations": {},
+          "exposure_sum_m2_kg_m3_h": 2230.73138708686,
+          "peak_anomaly_kg_m3": 0.0002375509576116078,
+          "coordination_benefit": 0.006501946333367099,
+          "benefit_null": false
+        }
+      },
+      "coincidental_dumping": {
+        "B_capacity_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.9936870769852846,
+            "plant_1": 0.963849022641515,
+            "plant_2": 0.9325947493618637
+          },
+          "between_plant_sync_B": 0.986542048061588,
+          "between_plant_sync_C": 0.9199554993590322,
+          "overlap_contribution_B_m2_kg_m3_h": 13.10764572090875,
+          "overlap_contribution_C_m2_kg_m3_h": 13.269167295652096,
+          "single_source_exposures_B": [
+            418.8995965119456,
+            937.7824519762759,
+            819.8682250438568
+          ],
+          "single_source_exposures_C": [
+            411.3620499120473,
+            1090.6353776741785,
+            691.9793027865354
+          ],
+          "poor_flushing_fraction_B": 0.45799689377931124,
+          "poor_flushing_fraction_C": 0.45217629803571735
+        },
+        "B_cost_vs_C": {
+          "pearson_r": {
+            "plant_0": 0.9141452817620418,
+            "plant_1": 0.8930489060246808,
+            "plant_2": 0.8716604960252619
+          },
+          "between_plant_sync_B": 0.873443828950161,
+          "between_plant_sync_C": 0.9199554993590322,
+          "overlap_contribution_B_m2_kg_m3_h": 13.171694973865215,
+          "overlap_contribution_C_m2_kg_m3_h": 13.269167295652096,
+          "single_source_exposures_B": [
+            377.21440107921137,
+            1134.688431837194,
+            720.2558769897972
+          ],
+          "single_source_exposures_C": [
+            411.3620499120473,
+            1090.6353776741785,
+            691.9793027865354
+          ],
+          "poor_flushing_fraction_B": 0.45938167482508857,
+          "poor_flushing_fraction_C": 0.45217629803571735
+        }
+      }
+    }
+  }
+}
