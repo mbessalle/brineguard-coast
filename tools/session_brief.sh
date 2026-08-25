@@ -60,3 +60,4 @@ fi
 
 section "Standing orders"
 echo "Role: SSSF orchestrator/evaluator (Tier 1). Delegate builds to Workhorse tier per sssf.config.yaml via 'orca orchestration' (task-create -> worker-start -> check --wait). Verify with deterministic gates (adws/gates.py, pytest). Do not implement feature code directly."
+echo "VERIFY, DON'T GUESS: latest-model/version questions -> web-search 'latest model by <company>' first, then confirm in catalog/CLI. Never grep with guessed version substrings; list whole families."

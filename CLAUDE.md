@@ -30,6 +30,12 @@ This repo runs a Super Simple Software Factory (`adws/SSSF_SPEC.md`; routing in
 
 ## Rules
 
+- **VERIFY, DON'T GUESS.** Never answer a factual question from recall or by
+  probing guessed values (version numbers, flag names, IDs). For "what is the
+  latest X": web-search `latest model by <company name>` FIRST, then confirm
+  availability in the actual catalog/CLI. When grepping a catalog, list the
+  whole family — never filter by a guessed version substring.
+
 - Reusable tools over ad-hoc snippets: check `tools/README.md` first; extend a
   template-table tool (e.g. `tools/probe.py`) rather than writing a one-off check.
 - Run artifacts follow the contract in `src/brineguard/experiments/runner.py`;
