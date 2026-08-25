@@ -94,6 +94,30 @@ routes:
                          role_prompt: adws/prompts/documenter.md}
 
 # ---------------------------------------------------------------------------
+# Model anonymization (system-orchestration.md §1). NEVER expose real model
+# names to peer agents in multi-agent prompts (fan-out opinions, debates,
+# collaboration) — use these role aliases to avoid bias, sycophancy toward
+# named models, or adversarial behavior. The orchestrator's own reports to the
+# user MAY map aliases back to real models.
+# ---------------------------------------------------------------------------
+anonymization:
+  enabled: true
+  aliases:
+    planner: Architect/Rune
+    reviewer: Reviewer/Vale
+    reviewer_independent: Reviewer/Sable
+    builder: Builder-1/Flux
+    builder_escalation: Builder-2/Drift
+    scout: Scout/Wisp
+    documenter: Scribe/Quill
+
+# Lightweight local tier (C/D, system-orchestration.md §2): cheap sub-tasks,
+# syntax checks, single-file audits via local OSS models (Qwen, Nemotron).
+# NOT INSTALLED on this machine (no ollama/local runtime found 2026-08-25);
+# nearest live equivalent is routes.scout (deepseek-v4-flash). Add real local
+# routes here once a runtime exists, then verify with tools/probe.py.
+
+# ---------------------------------------------------------------------------
 # Routing policy
 # ---------------------------------------------------------------------------
 routing:
