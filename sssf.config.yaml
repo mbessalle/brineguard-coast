@@ -22,17 +22,20 @@ tiers:
     roles:
       - planner
       - reviewer
+    # Independent second-opinion reviews (avoids self-review bias) route to a
+    # non-Claude frontier model:
+    independent_reviewer_route: reviewer_independent
 
   tier_2_workhorse:
     description: >
       Code generation against a strict plan, file edits, code search/recon,
       diff summarization, documentation writing. Cheaper and faster than
       Tier 1; used for anything that follows an already-decided plan rather
-      than making structural decisions.
+      than making structural decisions. Values are route names (see `routes`).
     models:
-      builder: claude-sonnet-5
-      documenter: claude-sonnet-5
-      scout: claude-haiku-4-5-20251001
+      builder: builder
+      documenter: documenter
+      scout: scout
     roles:
       - builder
       - scout
@@ -50,6 +53,44 @@ tiers:
       - test_runner
       - artifact_verifier
       - schema_verifier
+
+# ---------------------------------------------------------------------------
+# Backends and routes — VERIFIED live 2026-08-25 via tools/probe.py.
+# A route = backend + model. Re-verify with `python3 tools/probe.py` and
+# re-check pricing via `python3 tools/openrouter_call.py models <filter>`
+# before trusting numbers. Keys: gitignored .env (OPENROUTER_API_KEY),
+# .env.gemini_key; codex uses its own auth.
+# ---------------------------------------------------------------------------
+backends:
+  session:        # the orchestrating Claude Code session itself (Tier 1)
+    invoke: interactive
+  claude-cli:
+    invoke: [claude, -p, "{prompt}", --model, "{model}", --output-format, text]
+  codex-cli:
+    invoke: [codex, exec, --skip-git-repo-check, "{prompt}"]
+  pi-openrouter:  # full agentic coder: read/bash/edit/write tools
+    invoke: [pi, --provider, openrouter, --model, "{model}", -p, --no-session,
+             --append-system-prompt, "{role_prompt}", "{prompt}"]
+    env: {OPENROUTER_API_KEY: from tools/openrouter_call.py:load_key}
+  openrouter-api: # single-turn only (no tools)
+    invoke: [python3, tools/openrouter_call.py, chat, -m, "{model}", "{prompt}"]
+
+routes:
+  planner:              {backend: session,        model: claude-fable-5}
+  reviewer:             {backend: session,        model: claude-fable-5}
+  reviewer_independent: {backend: openrouter-api, model: moonshotai/kimi-k3,
+                         usd_per_m_in: 3.00, usd_per_m_out: 15.00}
+  builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
+                         usd_per_m_in: 0.52, usd_per_m_out: 1.04,
+                         role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)
+  builder_escalation:   {backend: codex-cli,      model: gpt-5.5,
+                         role_prompt: adws/prompts/builder.md}   # subscription, no per-token cost
+  scout:                {backend: pi-openrouter,  model: deepseek/deepseek-v4-flash,
+                         usd_per_m_in: 0.056, usd_per_m_out: 0.11,
+                         role_prompt: adws/prompts/scout.md}
+  documenter:           {backend: openrouter-api, model: openai/gpt-5-mini,
+                         usd_per_m_in: 0.25, usd_per_m_out: 2.00,
+                         role_prompt: adws/prompts/documenter.md}
 
 # ---------------------------------------------------------------------------
 # Routing policy
@@ -84,6 +125,19 @@ routing:
       - retries_exhausted
       - plan_contradicted_by_diff
       - repeated_identical_failure   # same gate fails the same way twice
+    # Model-escalation ladder (mirrors Orca's 3-strike circuit breaker):
+    # builder (deepseek-v4-pro) -> builder_escalation (codex/gpt-5.5)
+    # -> planner (Tier 1 structural rethink). Retries stay on the same rung
+    # with exact stderr only; a rung change resets the retry budget once.
+    model_escalation: [builder, builder_escalation, planner]
+
+  # Task-type allocation hints:
+  #   recon/search/"where is X"        -> scout (near-free)
+  #   mechanical edits, tests, docs    -> builder / documenter cheap rungs
+  #   multi-file features              -> builder (default rung)
+  #   structural/architectural changes -> planner designs first, builder executes
+  #   anything touching src/brineguard numerics: builder MUST run full pytest
+  #   before reporting (suite ~2 s; also enforced by the PostToolUse hook).
 
 # ---------------------------------------------------------------------------
 # Context handoff convention
