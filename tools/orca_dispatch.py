@@ -104,12 +104,29 @@ def _orca(argv: list[str], *, dry_run: bool, json_output: bool = False,
     return {"_ok": proc.returncode == 0}
 
 
+def _playbook_hint(err_text: str, step: str) -> str:
+    """Map a failure to its recovery playbook section (LLM-interpreted
+    pseudo-code in adws/playbooks/dispatch_recovery.md)."""
+    t = err_text.lower()
+    if "waiter" in t:
+        sec = "§1"
+    elif "selector_not_found" in t:
+        sec = "§2"
+    elif "terminal wait" in step or "tui-idle" in t:
+        sec = "§5"
+    elif "update" in t and ("codex" in t or "prompt" in t):
+        sec = "§4"
+    else:
+        return ""
+    return f" — see adws/playbooks/dispatch_recovery.md {sec}"
+
+
 def _check_ok(result: dict | None, step: str) -> None:
     if result is None:
         return  # dry-run
     if not result.get("ok"):
         err = result.get("error") or result.get("message") or json.dumps(result)
-        sys.exit(f"orca error at step '{step}': {err}")
+        sys.exit(f"orca error at step '{step}': {err}{_playbook_hint(str(err), step)}")
 
 
 def _ledger(record: dict) -> None:

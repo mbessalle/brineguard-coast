@@ -50,6 +50,13 @@ This repo runs a Super Simple Software Factory (`adws/SSSF_SPEC.md`; routing in
   claim sources. Name the exact check performed ("character-count verified"),
   never a bare "verified".
 
+- **Artifact-class boundary:** code decides and verifies (gates, preflight,
+  verdict flow, ledger); playbooks (`adws/playbooks/`, LLM-interpreted
+  pseudo-code) carry recovery/triage procedures whose environment drifts
+  faster than code; templates (`adws/templates/`) carry intent across DAG
+  edges. New procedures go to the right class — never policy into prose,
+  never recovery into rigid code.
+
 - Reusable tools over ad-hoc snippets: check `tools/README.md` first; extend a
   template-table tool (e.g. `tools/probe.py`) rather than writing a one-off check.
 - Run artifacts follow the contract in `src/brineguard/experiments/runner.py`;
