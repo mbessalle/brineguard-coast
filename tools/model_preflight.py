@@ -23,7 +23,8 @@ import time
 from pathlib import Path
 
 CACHE_TTL_S = 600
-CACHE_DIR = Path(tempfile.gettempdir()) / "model_preflight_cache"
+# user-owned cache dir, not world-writable /tmp (audit X9)
+CACHE_DIR = Path.home() / ".cache" / "model_preflight"
 
 # provider -> argv that prints the catalog (one model id per line after filtering)
 PROVIDERS: dict[str, dict] = {
@@ -52,6 +53,8 @@ def catalog(provider: str) -> set[str] | None:
         # pi prints the catalog on stderr; merge streams before filtering
         proc = subprocess.run(row["cmd"], stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, timeout=30)
+        if proc.returncode != 0:  # never cache a failing CLI's output (X16)
+            return None
         ids = {m for line in proc.stdout.splitlines() if (m := row["filter"](line))}
     except Exception:
         return None
@@ -62,9 +65,18 @@ def catalog(provider: str) -> set[str] | None:
 
 
 def check(provider: str, model: str) -> tuple[bool, str]:
+    """Fail CLOSED (audit X6): an unverifiable model blocks the spawn unless
+    MODEL_PREFLIGHT_ALLOW_UNVERIFIED=1 is set explicitly for that call."""
+    import os
+    override = os.environ.get("MODEL_PREFLIGHT_ALLOW_UNVERIFIED") == "1"
     ids = catalog(provider)
     if ids is None:
-        return True, f"WARN: catalog for '{provider}' unavailable; cannot verify '{model}'"
+        if provider not in PROVIDERS:
+            return True, f"OK: provider '{provider}' validates models server-side or is out of scope"
+        if override:
+            return True, f"WARN: catalog for '{provider}' unavailable; UNVERIFIED spawn allowed by explicit override"
+        return False, (f"BLOCKED: catalog for '{provider}' unavailable; cannot verify "
+                       f"'{model}'. Set MODEL_PREFLIGHT_ALLOW_UNVERIFIED=1 to override knowingly.")
     if model in ids:
         return True, f"OK: {provider}/{model} present in catalog ({len(ids)} models)"
     return False, (f"BLOCKED: model '{model}' NOT in {provider} catalog. The runtime "
@@ -79,10 +91,15 @@ def hook() -> int:
     except json.JSONDecodeError:
         return 0
     cmd = (payload.get("tool_input") or {}).get("command", "")
-    m = re.search(r"\bpi\b[^|;&]*?--provider\s+(\S+)[^|;&]*?--model\s+(\S+)", cmd)
-    if not m:
+    # order-insensitive, tolerates --flag=value (audit X7); scoped to pi
+    # launches — codex validates server-side with a hard 400
+    if not re.search(r"(^|[\s|;&(])pi\s", cmd):
         return 0
-    ok, msg = check(m.group(1), m.group(2).split(":")[0])
+    pm = re.search(r"--provider[=\s]+(\S+)", cmd)
+    mm = re.search(r"--model[=\s]+(\S+)", cmd)
+    if not (pm and mm):
+        return 0
+    ok, msg = check(pm.group(1).strip("'\""), mm.group(1).strip("'\"").split(":")[0])
     if not ok:
         print(json.dumps({"hookSpecificOutput": {
             "hookEventName": "PreToolUse",

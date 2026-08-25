@@ -91,8 +91,19 @@ def json_parse(path: str) -> dict:
         isinstance(p, str) for p in data["changed_files"]
     ):
         problems.append("changed_files must be a list of strings")
+    ALLOWED_VERDICTS = ("APPROVE", "REQUEST-CHANGES", "PARTIAL", "BLOCKED")
+    if "verdict" in data and data["verdict"] not in ALLOWED_VERDICTS:
+        problems.append(f"verdict must be one of {ALLOWED_VERDICTS}, got {data['verdict']!r}")
     if problems:
         return {"gate": "json_parse", "pass": False, "detail": f"{path}: {'; '.join(problems)}"}
+    # A reviewer envelope with an adverse verdict must FAIL the gate even
+    # though the reviewer process itself succeeded (audit X4: decorative verdict).
+    if data.get("verdict") in ("REQUEST-CHANGES", "BLOCKED", "PARTIAL"):
+        return {
+            "gate": "json_parse",
+            "pass": False,
+            "detail": f"{path}: reviewer verdict {data['verdict']} blocks advancement: {str(data['summary'])[:200]}",
+        }
     if data["status"] == "failed":
         return {
             "gate": "json_parse",

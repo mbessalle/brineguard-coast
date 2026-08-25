@@ -219,7 +219,8 @@ def _extract_delivery(result: dict) -> tuple[str | None, list[dict]]:
     return delivery_id, messages
 
 
-def wait_for_completion(timeout_s: int, *, dry_run: bool = False) -> int:
+def wait_for_completion(timeout_s: int, *, dry_run: bool = False,
+                        expect_dispatch: str | None = None) -> int:
     """Rolling `check --wait` until worker_done (0) or escalation (2).
     Timeout returns 3; unparseable Delivery returns 4 WITHOUT acking so the
     batch replays for manual handling. question messages are printed with
@@ -269,6 +270,16 @@ def wait_for_completion(timeout_s: int, *, dry_run: bool = False) -> int:
             body = m.get("body") or m.get("subject") or ""
             print(f"[wait] {mtype} id={mid}: {str(body)[:2000]}")
             if mtype == "worker_done":
+                # Correlate to OUR dispatch when the message carries an id
+                # (audit X15: a stale completion in the Run mailbox must not
+                # validate this dispatch).
+                msg_disp = (m.get("dispatchId") or m.get("dispatch_id")
+                            or m.get("dispatch"))
+                if expect_dispatch and msg_disp and msg_disp != expect_dispatch:
+                    print(f"[wait]   IGNORED: worker_done for other dispatch {msg_disp}")
+                    continue
+                if expect_dispatch and not msg_disp:
+                    print("[wait]   WARNING: completion carries no dispatch id; correlation unverified")
                 outcome = 0
             elif mtype == "escalation":
                 outcome = 2
@@ -343,6 +354,17 @@ def cmd_run(args: argparse.Namespace) -> int:
     spec = _resolve_spec(args.spec)
     title = spec.strip().split("\n", 1)[0][:80]
 
+    # worker-start agents get no --append-system-prompt path, so the route's
+    # role prompt must ride in the task spec itself or it is silently lost
+    # (audit X1: an unframed review reported as independent/adversarial).
+    if AGENTS[BACKEND_TO_AGENT[backend_name]].get("worker_start") and route.get("role_prompt"):
+        rp = REPO_ROOT / route["role_prompt"]
+        if rp.is_file():
+            spec = (f"ROLE PROMPT (binding, from {route['role_prompt']}):\n"
+                    f"{rp.read_text()}\n---\nTASK:\n{spec}")
+        else:
+            sys.exit(f"role_prompt file missing: {rp}")
+
     task_id = _task_create(spec, dry_run=args.dry_run)
     if not args.dry_run:
         print(f"[run] task_id={task_id}")
@@ -351,8 +373,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     dispatch_id = None
 
     if agent.get("worker_start"):
+        # "current" fails with selector_not_found when the orchestrator's own
+        # terminal is not worktree-bound; --worktree takes an explicit selector.
         ws = ["orchestration", "worker-start", "--task", task_id,
-              "--worktree", "current", "--agent", agent["orca_agent"]]
+              "--worktree", args.worktree, "--agent", agent["orca_agent"]]
         if model and model != agent.get("default_model"):
             ws += ["--model", model]
         r = _orca(ws, dry_run=args.dry_run, json_output=not args.dry_run)
@@ -398,7 +422,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                  "dispatch_id": dispatch_id, "spec_head": title})
 
     if args.wait:
-        rc = wait_for_completion(args.timeout, dry_run=args.dry_run)
+        rc = wait_for_completion(args.timeout, dry_run=args.dry_run,
+                                 expect_dispatch=dispatch_id)
         if not args.dry_run:
             _ledger({"event": "wait_result", "task_id": task_id,
                      "dispatch_id": dispatch_id, "rc": rc})
@@ -456,6 +481,8 @@ def main() -> int:
     p_run.add_argument("--wait", action="store_true", help="Block on worker_done/escalation, ack, return.")
     p_run.add_argument("--timeout", type=int, default=3600, help="--wait budget in seconds (default 3600).")
     p_run.add_argument("--terminal", help="Reuse an existing idle pi terminal handle (skips create + 60s idle wait).")
+    p_run.add_argument("--worktree", default="current",
+                       help="Worker-start worktree selector (default 'current'; use id:<uuid>::<path> if selector_not_found).")
     p_run.add_argument("--dry-run", action="store_true")
 
     p_wait = sub.add_parser("wait", help="Block on the Run's worker_done/escalation/question events.")

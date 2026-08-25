@@ -100,8 +100,8 @@ backends:
 routes:
   planner:              {backend: session,        model: claude-fable-5}
   reviewer:             {backend: session,        model: claude-fable-5}
-  # Default independent reviewer: SOTA-tier on the OpenAI subscription via pi
-  # ($0 marginal). kimi kept for /fh-debate diversity.
+  # Default independent reviewer: real gpt-5.6-sol via codex CLI (the pi
+  # route caps at gpt-5.5). kimi kept for /fh-debate diversity.
   reviewer_independent: {backend: codex-cli, model: gpt-5.6-sol,
                          role_prompt: adws/prompts/reviewer.md}  # real 5.6-sol, verified 2026-08-26
   reviewer_kimi:        {backend: openrouter-api, model: moonshotai/kimi-k3,
