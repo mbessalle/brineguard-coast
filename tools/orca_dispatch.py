@@ -322,6 +322,16 @@ def cmd_run(args: argparse.Namespace) -> int:
                  f"(session/openrouter-api routes are not dispatchable workers.)")
     agent = AGENTS[BACKEND_TO_AGENT[backend_name]]
 
+    # Model-identity preflight: never spawn a worker whose model the runtime
+    # would silently swap (pi downgraded a missing model without failing).
+    provider = {"pi-openrouter": "openrouter", "pi-openai-codex": "openai-codex"}.get(backend_name)
+    if provider and not args.dry_run:
+        from model_preflight import check as preflight_check
+        ok, msg = preflight_check(provider, model)
+        print(f"[preflight] {msg}")
+        if not ok:
+            sys.exit(2)
+
     spec = _resolve_spec(args.spec)
     title = spec.strip().split("\n", 1)[0][:80]
 

@@ -122,3 +122,4 @@ Find Red Sea product IDs at https://data.marine.copernicus.eu (filter by region 
 "Red Sea", variable = "sea_water_velocity"). On success saves under
 `data/registry/cmems/` with a provenance JSON sidecar.
 - agent_io_log.sh — register every agent call (prompt/stdout/meta) to the agent-io branch for debugging
+- model_preflight.py — verify model exists in provider catalog before any spawn (also the PreToolUse hook)
