@@ -243,8 +243,42 @@ def chk_protected(man):
     return r["pass"], str(r["detail"])[:200]
 
 
+def chk_attestation(man):
+    row = next((r for r in _ledger_rows() if r.get("dispatch_id") == man["dispatch_id"]
+                and r["event"] == "dispatch"), {})
+    rec = row.get("receipt")
+    if rec is None:
+        return False, "no receipt recorded in ledger (pre-attestation dispatch?)"
+    if rec.get("mode") == "preflight_only":
+        return True, "LOUD: pi two-step route — catalog preflight only, launch not attested"
+    eff = str(rec.get("effective") or "")
+    ok = bool(eff) and man["expected_model"].split("/")[-1] in eff
+    return ok, (f"launch.effective={eff} matches expected" if ok
+                else f"launch.effective={eff!r} vs expected {man['expected_model']}")
+
+
+def chk_correlation(man):
+    if not man.get("expect_correlation"):
+        return True, "SKIPPED loudly: manifest predates the correlation contract"
+    env_path = REPO / man.get("envelope_path", "adw_data/missioncontrol/envelope.json")
+    try:
+        corr = (json.loads(env_path.read_text()) or {}).get("correlation") or {}
+    except Exception as exc:
+        return False, f"cannot read envelope: {exc}"
+    did = corr.get("dispatch_id")
+    row = next((r for r in _ledger_rows() if r.get("dispatch_id") == man["dispatch_id"]
+                and r["event"] == "dispatch"), {})
+    pi_path = (row.get("receipt") or {}).get("mode") == "preflight_only"
+    if did is None and pi_path:
+        return True, "LOUD: correlation null — dispatch id not visible to pi-path workers (known limit)"
+    ok = did == man["dispatch_id"]
+    return ok, (f"envelope correlation matches {did}" if ok
+                else f"correlation {did!r} != dispatch {man['dispatch_id']}")
+
+
 CHECKS_STAGE2 = [
     ("worker_done", chk_worker_done), ("envelope_gate", chk_envelope),
+    ("launch_attestation", chk_attestation), ("envelope_correlation", chk_correlation),
     ("diff_matches_claims", chk_diff_claims), ("protected_paths", chk_protected),
     ("deliverable_files", chk_files), ("stdlib_only", chk_stdlib_only),
     ("tests_green", chk_tests), ("live_server", chk_server),
