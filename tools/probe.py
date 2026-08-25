@@ -36,6 +36,8 @@ BACKENDS: dict[str, dict] = {
                    "model": "haiku", "env": None},
     "codex":      {"argv": ["codex", "exec", "--skip-git-repo-check", "{prompt}"],
                    "model": "(codex default)", "env": None},
+    "codex-sol":  {"argv": ["codex", "exec", "--skip-git-repo-check", "-m", "{model}", "{prompt}"],
+                   "model": "gpt-5.6-sol", "env": None},
     "pi":         {"argv": ["pi", "--provider", "openrouter", "--model", "{model}",
                             "-p", "--no-session", "{prompt}"],
                    "model": "deepseek/deepseek-v4-pro",

@@ -67,7 +67,7 @@ backends:
   claude-cli:
     invoke: [claude, -p, "{prompt}", --model, "{model}", --output-format, text]
   codex-cli:
-    invoke: [codex, exec, --skip-git-repo-check, "{prompt}"]
+    invoke: [codex, exec, --skip-git-repo-check, -m, "{model}", "{prompt}"]
   pi-openrouter:  # full agentic coder: read/bash/edit/write tools
     invoke: [pi, --provider, openrouter, --model, "{model}", -p, --no-session,
              --append-system-prompt, "{role_prompt}", "{prompt}"]
@@ -84,8 +84,11 @@ routes:
   builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
                          usd_per_m_in: 0.52, usd_per_m_out: 1.04,
                          role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)
-  builder_escalation:   {backend: codex-cli,      model: gpt-5.5,
+  builder_escalation:   {backend: codex-cli,      model: gpt-5.6-sol,
                          role_prompt: adws/prompts/builder.md}   # subscription, no per-token cost
+  reviewer_sol:         {backend: codex-cli,      model: gpt-5.6-sol}
+                        # SOTA-tier second opinion on subscription — prefer over
+                        # openrouter for OpenAI models (codex first, API fallback)
   scout:                {backend: pi-openrouter,  model: deepseek/deepseek-v4-flash,
                          usd_per_m_in: 0.056, usd_per_m_out: 0.11,
                          role_prompt: adws/prompts/scout.md}
