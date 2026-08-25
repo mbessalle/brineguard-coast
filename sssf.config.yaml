@@ -78,7 +78,10 @@ backends:
 routes:
   planner:              {backend: session,        model: claude-fable-5}
   reviewer:             {backend: session,        model: claude-fable-5}
-  reviewer_independent: {backend: openrouter-api, model: moonshotai/kimi-k3,
+  # Default independent reviewer: SOTA-tier on the codex subscription ($0
+  # marginal; reads AGENTS.md natively). kimi kept for /fh-debate diversity.
+  reviewer_independent: {backend: codex-cli,      model: gpt-5.6-sol}
+  reviewer_kimi:        {backend: openrouter-api, model: moonshotai/kimi-k3,
                          usd_per_m_in: 3.00, usd_per_m_out: 15.00,
                          role_prompt: agent-system-prompt.md}  # SOTA comms contract as system prompt
   builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
@@ -86,9 +89,6 @@ routes:
                          role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)
   builder_escalation:   {backend: codex-cli,      model: gpt-5.6-sol,
                          role_prompt: adws/prompts/builder.md}   # subscription, no per-token cost
-  reviewer_sol:         {backend: codex-cli,      model: gpt-5.6-sol}
-                        # SOTA-tier second opinion on subscription — prefer over
-                        # openrouter for OpenAI models (codex first, API fallback)
   scout:                {backend: pi-openrouter,  model: deepseek/deepseek-v4-flash,
                          usd_per_m_in: 0.056, usd_per_m_out: 0.11,
                          role_prompt: adws/prompts/scout.md}
