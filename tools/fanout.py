@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import os
+import random
 import re
 import sys
 import time
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 
@@ -46,13 +49,35 @@ def _sanitize(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", name)
 
 
+def _resolve_filenames(results: list[dict]) -> dict[str, str]:
+    """Resolve filename collisions: detect colliding sanitized aliases and
+    append a short stable hash of the route name."""
+    candidates: dict[str, list[dict]] = {}
+    for r in results:
+        candidates.setdefault(_sanitize(r["alias"]), []).append(r)
+    fname_map: dict[str, str] = {}
+    for sanitized, entries in candidates.items():
+        if len(entries) == 1:
+            fname_map[entries[0]["route"]] = sanitized
+        else:
+            for entry in entries:
+                h = hashlib.sha256(entry["route"].encode()).hexdigest()[:6]
+                fname_map[entry["route"]] = f"{sanitized}_{h}"
+    return fname_map
+
+
 def _read_prompt(prompt_text: str | None, prompt_file: str | None) -> str:
     if prompt_text:
         return prompt_text
     return Path(prompt_file).read_text(encoding="utf-8")
 
 
+def _read_system_file(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
 def _read_system(system: str | None) -> str | None:
+    """Legacy --system semantics: treat as file path if it exists, else text."""
     if not system:
         return None
     path = Path(system)
@@ -84,6 +109,33 @@ def _resolve_targets(route_names: list[str], config: dict) -> list[dict]:
         targets.append({"route": name, "alias": alias, "model": route["model"],
                         "config": route})
     return targets
+
+
+# ---- retry helpers (F49) ---------------------------------------------------
+
+def _is_transient_error(exc: Exception) -> bool:
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code == 429 or 500 <= exc.code < 600
+    if isinstance(exc, urllib.error.URLError):
+        return True  # timeout, connection refused, DNS, etc.
+    # Some HTTP libraries wrap HTTPError; check for code attribute
+    if hasattr(exc, "code"):
+        code = getattr(exc, "code", None)
+        if isinstance(code, int):
+            return code == 429 or 500 <= code < 600
+    if hasattr(exc, "reason"):
+        return True  # URLError-like with reason
+    return False
+
+
+def _retry_sleep(attempt: int, base: float = 2.0) -> float:
+    """Exponential backoff + jitter."""
+    return base * (2 ** attempt) + random.uniform(0, 1)
+
+
+def _max_workers(n_targets: int, cap: int = 4) -> int:
+    """Global concurrency cap: never more workers than targets or the cap."""
+    return min(n_targets, cap)
 
 
 # ---- single-route call ------------------------------------------------------
@@ -160,15 +212,27 @@ def _call_route(target: dict, prompt: str, system: str | None,
     messages.append({"role": "user", "content": prompt})
 
     start = time.monotonic()
-    try:
-        result = request("/chat/completions", {"model": model, "messages": messages})
-        text = result["choices"][0]["message"]["content"]
-        latency = round(time.monotonic() - start, 1)
-        response_chars = len(text)
-        actual_model = result.get("model", model)
-    except Exception as exc:
+    retries = 1
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            result = request("/chat/completions", {"model": model, "messages": messages})
+            text = result["choices"][0]["message"]["content"]
+            latency = round(time.monotonic() - start, 1)
+            response_chars = len(text)
+            actual_model = result.get("model", model)
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            elapsed = time.monotonic() - start
+            if attempt < retries and _is_transient_error(exc) and elapsed + 10 < timeout:
+                time.sleep(_retry_sleep(attempt))
+                continue
+            break
+    if last_error is not None:
         return {"status": "FAIL", "latency": round(time.monotonic() - start, 1),
-                "error": str(exc)[:200], "text": "", "est_cost": 0,
+                "error": str(last_error)[:200], "text": "", "est_cost": 0,
                 "prompt_chars": prompt_chars, "response_chars": 0,
                 "actual_model": model}
 
@@ -198,16 +262,31 @@ def main() -> None:
     g.add_argument("--prompt-file", help="Path to file containing prompt")
     parser.add_argument("--routes", default=",".join(_DEFAULT_ROUTES),
                         help=f"Comma-separated route names (default: {','.join(_DEFAULT_ROUTES)})")
-    parser.add_argument("--system", help="System prompt text or file path")
+    sys_group = parser.add_mutually_exclusive_group()
+    sys_group.add_argument("--system-text", help="System prompt text")
+    sys_group.add_argument("--system-file", help="Path to file containing system prompt")
+    parser.add_argument("--system", dest="system_legacy",
+                        help="[deprecated] system prompt text or file path")
     parser.add_argument("--out", help="Output directory (default: adw_data/fanout/<timestamp>)")
     parser.add_argument("--timeout", type=int, default=180, help="Per-route timeout in seconds")
+    parser.add_argument("--max-concurrency", type=int, default=4,
+                        help="Global worker cap (default: 4)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print planned calls without making any")
     args = parser.parse_args()
 
     config = _load_config()
     prompt = _read_prompt(args.prompt, args.prompt_file)
-    system = _read_system(args.system)
+    if args.system_legacy:
+        print("WARNING: --system is deprecated; use --system-text or --system-file",
+              file=sys.stderr)
+        system = _read_system(args.system_legacy)
+    elif args.system_text:
+        system = args.system_text
+    elif args.system_file:
+        system = _read_system_file(args.system_file)
+    else:
+        system = None
     route_names = [r.strip() for r in args.routes.split(",") if r.strip()]
     targets = _resolve_targets(route_names, config)
 
@@ -229,7 +308,8 @@ def main() -> None:
         sys.exit(1)
 
     results: list[dict] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(targets)) as pool:
+    max_workers = _max_workers(len(targets), args.max_concurrency)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
         futs = {pool.submit(_call_route, t, prompt, system, args.timeout): t
                 for t in targets}
         # Global deadline: unfinished futures after --timeout become FAILs
@@ -261,13 +341,17 @@ def main() -> None:
     # Sort for stable output
     results.sort(key=lambda r: r["alias"])
 
+    # ---- resolve filename collisions (F46) ----
+    fname_map = _resolve_filenames(results)
+
     # ---- write per-route files + collect aggregate ----
     agg_parts: list[str] = []
     metrics_rows: list[dict] = []
+    identity_rows: list[dict] = []
     any_pass = False
 
     for r in results:
-        fname = _sanitize(r["alias"]) + ".md"
+        fname = fname_map[r["route"]] + ".md"
         body = r["text"] if r["status"] == "PASS" else (
             f"STATUS: FAIL\nERROR: {r.get('error', 'unknown')}")
         content = f"# {r['alias']}\n\n{body}".strip() + "\n"
@@ -280,20 +364,26 @@ def main() -> None:
 
         metrics_rows.append({
             "alias": r["alias"],
-            "route": r["route"],
-            "model": r.get("actual_model", r.get("model_cfg", "")),
             "status": r["status"],
-            "error": r.get("error"),
             "latency_s": r["latency"],
             "est_cost_usd": r["est_cost"],
+        })
+        identity_rows.append({
+            "alias": r["alias"],
+            "route": r["route"],
+            "model": r.get("actual_model", r.get("model_cfg", "")),
         })
 
     # ---- aggregate.md ----
     (out_dir / "aggregate.md").write_text("\n".join(agg_parts) + "\n", encoding="utf-8")
 
-    # ---- metrics.json ----
+    # ---- metrics.json (alias + latency + status + est_cost only; F48) ----
     (out_dir / "metrics.json").write_text(json.dumps(metrics_rows, indent=2) + "\n",
                                           encoding="utf-8")
+
+    # ---- identity_map.json (orchestrator-only; F48) ----
+    (out_dir / "identity_map.json").write_text(json.dumps(identity_rows, indent=2) + "\n",
+                                                encoding="utf-8")
 
     # ---- stdout table ----
     print(f"{'ALIAS':20} {'STATUS':8} {'LATENCY':>8} {'EST COST':>10}")
