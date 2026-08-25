@@ -84,6 +84,10 @@ routes:
   reviewer_kimi:        {backend: openrouter-api, model: moonshotai/kimi-k3,
                          usd_per_m_in: 3.00, usd_per_m_out: 15.00,
                          role_prompt: agent-system-prompt.md}  # SOTA comms contract as system prompt
+  # Qwen flagship (2.4T, 2026-08-03; benchmarks above kimi-k3, cheaper):
+  reviewer_qwen_max:    {backend: openrouter-api, model: qwen/qwen3.8-max,
+                         usd_per_m_in: 2.00, usd_per_m_out: 6.00,
+                         role_prompt: agent-system-prompt.md}
   builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
                          usd_per_m_in: 0.52, usd_per_m_out: 1.04,
                          role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)
@@ -124,6 +128,8 @@ anonymization:
     documenter: Scribe/Quill
     lightweight: Utility-1/Mote
     lightweight_qwen: Utility-2/Grit
+    reviewer_kimi: Reviewer/Onyx
+    reviewer_qwen_max: Reviewer/Jade
 
 # Lightweight tier (C/D, system-orchestration.md §2): cheap sub-tasks, syntax
 # checks, single-file audits. Filled via OpenRouter instead of local models —
