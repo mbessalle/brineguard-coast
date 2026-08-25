@@ -31,7 +31,10 @@ greps these IDs, so keep the AC<n> markers):
   include its tail in your completion message.
 - AC{n}: write the envelope to {adw_data/<task>/envelope.json} exactly as
   {"status": "succeeded", "summary": "<one paragraph>", "changed_files":
-  [<paths>]} — status "failed" with an honest summary if you could not finish.
+  [<paths>], "correlation": {"dispatch_id": "<from your task's dispatch
+  context>", "attempt": 1}} — status "failed" with an honest summary if you
+  could not finish. The correlation block is required so the verifier can
+  attest each envelope to its dispatch.
 
 {Optional: design taste in one line — aesthetics, size budgets.}
 

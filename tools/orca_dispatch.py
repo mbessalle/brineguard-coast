@@ -27,6 +27,7 @@ Grammar verified against `orca skills get orchestration` (v1.4.188+):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import subprocess
@@ -340,6 +341,33 @@ def _task_create(spec: str, *, dry_run: bool) -> str:
     return tr["result"]["task"]["id"]
 
 
+def _parse_receipt(receipt_raw: str) -> dict:
+    """Parse and validate the --json receipt. Returns the parsed dict or exits."""
+    try:
+        receipt = json.loads(receipt_raw)
+    except json.JSONDecodeError as e:
+        sys.exit(f"BLOCKED: --json receipt is not valid JSON: {e}")
+    if not isinstance(receipt, dict):
+        sys.exit("BLOCKED: --json receipt must be a JSON object")
+    return receipt
+
+
+def _dispatch_meta(task_id: str, dispatch_id: str, route_name: str,
+                   model: str, spec: str) -> dict:
+    """Build and write dispatch_meta.json; return the meta dict."""
+    meta_dir = REPO_ROOT / "adw_data" / "dispatches" / dispatch_id
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    spec_sha256 = hashlib.sha256(spec.encode()).hexdigest()
+    base = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                          text=True, cwd=REPO_ROOT)
+    base_sha = base.stdout.strip() if base.returncode == 0 else "unknown"
+    meta = {"task_id": task_id, "dispatch_id": dispatch_id, "attempt": 1,
+            "route": route_name, "model": model,
+            "spec_sha256": spec_sha256, "base_sha": base_sha}
+    (meta_dir / "dispatch_meta.json").write_text(json.dumps(meta))
+    return meta
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     config = load_sssf_config()
     route_name = args.route
@@ -359,6 +387,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                  f"agent mapping. Supported: {sorted(BACKEND_TO_AGENT)}. "
                  f"(session/openrouter-api routes are not dispatchable workers.)")
     agent = AGENTS[BACKEND_TO_AGENT[backend_name]]
+
+    # Receipt parsing (attestation)
+    receipt = None
+    if args.json:
+        receipt = _parse_receipt(args.json)
 
     # Model-identity preflight: never spawn a worker whose model the runtime
     # would silently swap (pi downgraded a missing model without failing).
@@ -390,8 +423,35 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     term_handle = None
     dispatch_id = None
+    receipt_record = None  # populated for ledger
 
     if agent.get("worker_start"):
+        # --- Attestation: worker-start path REQUIRES receipt ---
+        if not receipt:
+            print("BLOCKED: worker-start dispatch requires --json receipt for attestation",
+                  file=sys.stderr)
+            sys.exit(5)
+
+        # Extract launch data defensively (AC1)
+        launch = receipt.get("launch", {}) if isinstance(receipt, dict) else {}
+        requested = launch.get("requested") if isinstance(launch, dict) else None
+        effective = launch.get("effective") if isinstance(launch, dict) else None
+        if not isinstance(requested, dict):
+            requested = {}
+        if not isinstance(effective, dict):
+            effective = {}
+        effective_model = effective.get("model")
+
+        # Model mismatch check (AC2): compare effective model to route config
+        if effective_model and effective_model != model:
+            print(f"MISMATCH: receipt effective model '{effective_model}' "
+                  f"!= route model '{model}'", file=sys.stderr)
+            _ledger({"event": "launch_rejected", "route": route_name,
+                     "model": model, "task_id": task_id,
+                     "receipt_effective_model": effective_model,
+                     "spec_head": title})
+            sys.exit(6)
+
         # "current" fails with selector_not_found when the orchestrator's own
         # terminal is not worktree-bound; --worktree takes an explicit selector.
         ws = ["orchestration", "worker-start", "--task", task_id,
@@ -404,8 +464,21 @@ def cmd_run(args: argparse.Namespace) -> int:
             res = r.get("result") or {}
             dispatch_id = (res.get("dispatch") or {}).get("id") or res.get("dispatchId")
             print(f"[run] worker started; dispatch_id={dispatch_id}")
+
+            # Save raw receipt (AC1)
+            receipt_dir = REPO_ROOT / "adw_data" / "receipts"
+            receipt_dir.mkdir(parents=True, exist_ok=True)
+            receipt_dir.joinpath(f"{dispatch_id}.json").write_text(
+                json.dumps(receipt))
+            receipt_sha256 = hashlib.sha256(
+                json.dumps(receipt, sort_keys=True).encode()).hexdigest()
+            receipt_record = {"requested": requested, "effective": effective,
+                              "receipt_sha256": receipt_sha256}
     else:
         # --- two-step pi path ---
+        # Pi path records preflight_only — never claims attestation it lacks (AC1)
+        receipt_record = {"mode": "preflight_only"}
+
         if args.terminal:
             term_handle = args.terminal
             print(f"[run] reusing terminal {term_handle} (skipping create + idle wait)")
@@ -435,10 +508,16 @@ def cmd_run(args: argparse.Namespace) -> int:
             dispatch_id = dr["result"]["dispatch"]["id"]
             print(f"[run] dispatch_id={dispatch_id}")
 
-    if not args.dry_run:
-        _ledger({"event": "dispatch", "route": route_name, "model": model,
-                 "task_id": task_id, "terminal": term_handle,
-                 "dispatch_id": dispatch_id, "spec_head": title})
+    if not args.dry_run and dispatch_id:
+        # Write dispatch_meta.json (AC3) — both paths
+        _dispatch_meta(task_id, dispatch_id, route_name, model, spec)
+
+        ledger_rec = {"event": "dispatch", "route": route_name, "model": model,
+                      "task_id": task_id, "terminal": term_handle,
+                      "dispatch_id": dispatch_id, "spec_head": title}
+        if receipt_record is not None:
+            ledger_rec["receipt"] = receipt_record
+        _ledger(ledger_rec)
 
     if args.wait:
         rc = wait_for_completion(args.timeout, dry_run=args.dry_run,
@@ -500,6 +579,8 @@ def main() -> int:
     p_run.add_argument("--wait", action="store_true", help="Block on worker_done/escalation, ack, return.")
     p_run.add_argument("--timeout", type=int, default=3600, help="--wait budget in seconds (default 3600).")
     p_run.add_argument("--terminal", help="Reuse an existing idle pi terminal handle (skips create + 60s idle wait).")
+    p_run.add_argument("--json", default=None,
+                       help="Orca dispatch receipt JSON (attestation; required for worker-start routes).")
     p_run.add_argument("--worktree", default="current",
                        help="Worker-start worktree selector (default 'current'; use id:<uuid>::<path> if selector_not_found).")
     p_run.add_argument("--dry-run", action="store_true")
