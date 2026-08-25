@@ -1,967 +1,466 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPIW 2026 Strategy Explorer: BrineGuard Coast Engine</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        /* Custom Chart Container Styling as per requirements */
-        .chart-container {
-            position: relative;
-            width: 100%;
-            max-width: 680px;
-            margin-left: auto;
-            margin-right: auto;
-            height: 330px;
-            max-height: 400px;
-        }
-        @media (min-width: 768px) {
-            .chart-container {
-                height: 370px;
-            }
-        }
-        .tab-active {
-            border-bottom: 3px solid #0284c7;
-            color: #0284c7;
-            font-weight: 700;
-        }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(226, 232, 240, 0.8);
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrineGuard Coast — Frozen Evidence Dashboard</title>
+<style>
+  :root {
+    --ink: #0f172a;
+    --muted: #475569;
+    --faint: #64748b;
+    --line: #e2e8f0;
+    --panel: #ffffff;
+    --bg: #f8fafc;
+    --accent: #0369a1;
+    --accent-soft: #e0f2fe;
+    --good: #047857;
+    --good-soft: #d1fae5;
+    --warn: #b45309;
+    --warn-soft: #fef3c7;
+    --null: #b91c1c;
+    --null-soft: #fee2e2;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 64px; }
+  header {
+    background: var(--ink);
+    color: #f1f5f9;
+    padding: 32px 0 28px;
+    border-bottom: 4px solid var(--accent);
+  }
+  header .wrap { padding-bottom: 0; }
+  .kicker {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #7dd3fc; font-weight: 700; margin: 0 0 8px;
+  }
+  h1 { font-size: 26px; margin: 0 0 6px; line-height: 1.2; }
+  .sub { color: #cbd5e1; margin: 0 0 16px; font-size: 15px; }
+  .provenance {
+    font-size: 13px; color: #e2e8f0;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .provenance code { color: #7dd3fc; font-family: var(--mono); }
+  main { padding-top: 28px; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 24px 26px;
+    margin-bottom: 22px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  h2 { font-size: 18px; margin: 0 0 4px; }
+  .claim-id {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 2px 8px; border-radius: 999px; vertical-align: 2px; margin-right: 8px;
+  }
+  .panel-lead { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .evidence {
+    font-size: 12px; color: var(--faint);
+    border-top: 1px dashed var(--line);
+    margin-top: 18px; padding-top: 10px;
+  }
+  .evidence code { font-family: var(--mono); color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #f1f5f9; font-weight: 700; color: var(--ink); font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  .good { color: var(--good); font-weight: 700; }
+  .null { color: var(--null); font-weight: 700; }
+  .muted { color: var(--faint); }
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 12px 14px; border-radius: 0 8px 8px 0;
+    font-size: 14px; margin: 14px 0;
+  }
+  .callout.null-result {
+    border-left-color: var(--null); background: var(--null-soft);
+  }
+  .callout.warn {
+    border-left-color: var(--warn); background: var(--warn-soft);
+  }
+  .big {
+    font-size: 30px; font-weight: 800; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .stat {
+    background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 14px;
+  }
+  .stat .label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); font-weight: 700; }
+  .stat .value { font-size: 20px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat .note { font-size: 12px; color: var(--faint); margin-top: 4px; }
+  .gate-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .gate-row:last-child { border-bottom: none; }
+  .gate-name { flex: 1; font-size: 14px; }
+  .gate-status { font-size: 12.5px; font-weight: 700; }
+  .pass { color: var(--good); }
+  footer {
+    border-top: 1px solid var(--line); margin-top: 8px; padding: 22px 0 0;
+    font-size: 13px; color: var(--muted);
+  }
+  footer code { font-family: var(--mono); color: var(--ink); background: #f1f5f9; padding: 1px 5px; border-radius: 4px; }
+  footer h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); margin: 16px 0 6px; }
+  .watermark {
+    display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+    color: #fff; background: repeating-linear-gradient(45deg, #b45309, #b45309 10px, #92400e 10px, #92400e 20px);
+    padding: 4px 10px; border-radius: 4px; text-transform: uppercase;
+  }
+  .range-sep { color: var(--faint); }
+  @media (max-width: 760px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    h1 { font-size: 22px; }
+  }
+</style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+<body>
 
-    <!-- Chosen Palette: Coastal Water & Deep Marine (Background: Slate Alabaster #F8FAFC, Primary: Deep Slate Navy #0F172A, Accent: Ocean Sky Blue #0284C7, Success: Marine Emerald #059669) -->
-    <!-- Application Structure Plan: 
-         The SPA translates the newly refined "BrineGuard Coast" submission strategy into an interactive exploration environment for GPIW 2026.
-         Structure:
-         1. Hero Header: Candidate credentials (ChemE + MSc Business & Innovation + AI/OR) and core prize metrics ($100k Track A Grand Prize + $250k SWA pilot).
-         2. Global Navigation Tabs:
-            - Tab 1: Strategic Fit & SWA Priorities (Regional marine impact, Saudi coastal clusters like Jubail & Red Sea, 8 criteria alignment).
-            - Tab 2: Candidate Evaluator (Interactive radar comparison between BrineGuard Coast, NeuroDesal PINN, and Brine Mining).
-            - Tab 3: Flagship Deep-Dive: BrineGuard Coast Engine (Mathematical formulation, reduced-order transport matrix, MILP constraints, and 48-hr multi-plant dispatch simulator).
-            - Tab 4: Application Package Architect (20-Slide Pitch Deck Explorer, 2-Min Video Script Timeline, Dossier checklist).
-            - Tab 5: SWA-WTIIRA Piloting Roadmap (Execution timeline from pre-submission to Jubail/Yanbu multi-plant cluster pilot).
-         Why this structure? BrineGuard Coast shifts the focus from vessel-level ML to regional multi-plant operations research, answering crucial SWA grid questions on how operational flexibility reduces marine salinity exposure.
-    -->
-    <!-- Visualization & Content Choices:
-         1. Candidate Comparison Radar Chart -> Goal: Compare candidate concepts across 5 qualitative planning dimensions -> Visual: Chart.js Radar Chart -> Interaction: Candidate selector & hover tooltips -> Justification: Illustrates why BrineGuard Coast was selected (regional SWA priority fit, no prototype hardware) — planning judgment, not measured performance.
-         2. Multi-Plant Environmental Dispatch Mock-up -> Goal: Explore how future benchmark outputs would respond across operational-flexibility assumptions -> Visual: Chart.js line chart -> Interaction: Sliders for Flexibility Tier, Product-Water Storage Buffer, and Exposure Penalty Weight. All displayed values are illustrative UI placeholders until the prototype solver is built.
-         NO SVG graphics used. NO Mermaid JS used. Canvas and styled HTML/CSS used exclusively.
-    -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<header>
+  <div class="wrap">
+    <p class="kicker">Technical Evidence Artifact</p>
+    <h1>BrineGuard Coast — Frozen Evidence Dashboard</h1>
+    <p class="sub">Coordinated environmental dispatch for multi-plant desalination. Every figure below is a measured value reproduced from the frozen evidence bundle, each with an artifact citation.</p>
+    <div class="provenance">
+      Source: <code>evidence/2026-08-25/</code> (benchmark, ensemble, sensitivity) &middot; manifest git revision <code>609b5b3</code> &middot; frozen per <code>FREEZE.md</code>. Claim wording is bounded by <code>docs/CLAIMS.md</code> (C1–C6).
+    </div>
+  </div>
+</header>
 
-    <!-- TOP HEADER / HERO -->
-    <header class="bg-slate-900 text-white shadow-lg border-b border-sky-800">
-        <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-                <div>
-                    <div class="flex items-center space-x-2">
-                        <span class="bg-sky-500 text-slate-950 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">GPIW 2026 Submission Blueprint</span>
-                        <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs px-2.5 py-1 rounded-full">Solopreneur Systems Engine</span>
-                    </div>
-                    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mt-1">
-                        BrineGuard Coast: Coordinated Environmental Dispatch
-                    </h1>
-                    <p class="text-slate-300 text-sm mt-1 max-w-3xl">
-                        Multi-plant desalination production scheduling integrating <span class="text-sky-400 font-semibold">BSc Chemical Engineering</span> mass transport, <span class="text-sky-400 font-semibold">MSc Business & Innovation</span> commercialization, and <span class="text-sky-400 font-semibold">applied AI and optimization</span>.
-                    </p>
-                </div>
-                <!-- KPI Badges -->
-                <div class="grid grid-cols-2 gap-3 sm:flex sm:space-x-3 w-full md:w-auto">
-                    <div class="bg-slate-800/80 border border-slate-700 p-3 rounded-lg text-center">
-                        <div class="text-xs text-slate-400 uppercase font-medium">Track A Grand Prize</div>
-                        <div class="text-lg font-bold text-sky-400">$100,000</div>
-                    </div>
-                    <div class="bg-slate-800/80 border border-slate-700 p-3 rounded-lg text-center">
-                        <div class="text-xs text-slate-400 uppercase font-medium">SWA Pilot Grant</div>
-                        <div class="text-lg font-bold text-emerald-400">Up to $250k</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </header>
+<div class="wrap">
+<main>
 
-    <!-- NAVIGATION BAR -->
-    <nav class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex space-x-2 sm:space-x-8 overflow-x-auto no-scrollbar">
-                <button onclick="switchTab('tab-fit')" id="nav-tab-fit" class="tab-active py-4 px-3 text-sm font-medium whitespace-nowrap transition-colors flex items-center space-x-2">
-                    <span>🌍</span>
-                    <span>Strategic Positioning</span>
-                </button>
-                <button onclick="switchTab('tab-candidates')" id="nav-tab-candidates" class="py-4 px-3 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap transition-colors flex items-center space-x-2">
-                    <span>⚖️</span>
-                    <span>Candidate Evaluator</span>
-                </button>
-                <button onclick="switchTab('tab-flagship')" id="nav-tab-flagship" class="py-4 px-3 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap transition-colors flex items-center space-x-2">
-                    <span>🧮</span>
-                    <span>Flagship: BrineGuard Engine</span>
-                </button>
-                <button onclick="switchTab('tab-package')" id="nav-tab-package" class="py-4 px-3 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap transition-colors flex items-center space-x-2">
-                    <span>📋</span>
-                    <span>Submission Package</span>
-                </button>
-                <button onclick="switchTab('tab-roadmap')" id="nav-tab-roadmap" class="py-4 px-3 text-sm font-medium text-slate-500 hover:text-slate-700 whitespace-nowrap transition-colors flex items-center space-x-2">
-                    <span>🗺️</span>
-                    <span>SWA Pilot Roadmap</span>
-                </button>
-            </div>
-        </div>
-    </nav>
+  <!-- ============================= (a) HEADLINE BENEFIT ============================= -->
+  <section id="headline">
+    <h2><span class="claim-id">C1 &middot; C2</span>Headline benefit &amp; flexibility scaling</h2>
+    <p class="panel-lead">
+      On the synthetic three-plant benchmark, coordinated dispatch reduces the salinity-exposure proxy relative to independently optimized plants — at no greater energy cost. Benefit is zero with no flexibility and grows with operational flexibility.
+    </p>
 
-    <!-- MAIN CONTENT AREA -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div class="grid-3">
+      <div class="stat">
+        <div class="label">Exposure reduction — steady currents</div>
+        <div class="value good">18.6–20.3%</div>
+        <div class="note">flex4, capacity rule (18.6%) and cost rule (20.3%)</div>
+      </div>
+      <div class="stat">
+        <div class="label">Exposure reduction — tidal currents</div>
+        <div class="value good">19.4–20.9%</div>
+        <div class="note">flex4, capacity rule (19.4%) and cost rule (20.9%)</div>
+      </div>
+      <div class="stat">
+        <div class="label">Coordinated energy cost (steady)</div>
+        <div class="value">32,035.63</div>
+        <div class="note">vs independent 32,717.38 (capacity) / 32,611.33 (cost) — strictly cheaper</div>
+      </div>
+    </div>
 
-        <!-- SECTION 1: STRATEGIC POSITIONING & SWA PRIORITIES -->
-        <section id="tab-fit" class="space-y-6">
-            <!-- Intro Paragraph -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-xl font-bold text-slate-900 mb-2">Regional Solopreneur Positioning & Saudi Water Strategy Fit</h2>
-                <p class="text-slate-600 text-sm leading-relaxed">
-                    Rather than competing on capital-intensive single-vessel hardware, <strong>BrineGuard Coast</strong> addresses a system-level gap: plant-by-plant outfall assessment can miss cumulative exposure where several desalination plants influence the same receiving water. The Track A prototype will test one representative, multi-plant Saudi coastal corridor with a rolling-horizon production-dispatch optimizer, explicit potable-water constraints, and an uncertainty-aware reduced-order transport model. It is a research proof of concept for future SWA decision support, not yet an operational controller.
-                </p>
-            </div>
+    <h3 style="margin-top:22px; font-size:15px;">Benefit scales with operational flexibility</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Flexibility scenario</th>
+          <th class="num">Coordinated benefit</th>
+          <th>Interpretation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>flex1 — no flexibility</td>
+          <td class="num">0.0%</td>
+          <td class="muted">All strategies provably identical (harness fairness check)</td>
+        </tr>
+        <tr>
+          <td>flex2 — &plusmn;10% turndown</td>
+          <td class="num">1.2–1.5%</td>
+          <td class="muted">Steady cost rule 1.2%, tidal capacity rule 1.5%</td>
+        </tr>
+        <tr>
+          <td>flex4 — network flexibility</td>
+          <td class="num good">18.6–20.9%</td>
+          <td class="muted">Shared storage + full turndown range</td>
+        </tr>
+      </tbody>
+    </table>
 
-            <!-- Profile Matrix & SWA Vectors Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Solopreneur Profile Advantage Card -->
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
-                                <span>⚡</span>
-                                <span>Solopreneur Cross-Disciplinary Synergies</span>
-                            </h3>
-                            <span class="bg-sky-100 text-sky-800 text-xs font-semibold px-2.5 py-0.5 rounded">High System Leverage</span>
-                        </div>
-                        <div class="space-y-4">
-                            <div class="border-l-4 border-sky-600 pl-3">
-                                <div class="text-xs font-bold uppercase text-sky-700">Chemical Engineering (BSc)</div>
-                                <div class="text-sm font-medium text-slate-800">Coastal Mass Transport & Outfall Dilution Kinetics</div>
-                                <p class="text-xs text-slate-500 mt-0.5">Formulates far-field advection-diffusion transport and cumulative multi-outfall seabed salinity buildup; near-field jet mixing is treated as a calibrated boundary condition (consistent with established tools like CORMIX) rather than re-derived from scratch.</p>
-                            </div>
-                            <div class="border-l-4 border-emerald-600 pl-3">
-                                <div class="text-xs font-bold uppercase text-emerald-700">Business & Innovation (MSc)</div>
-                                <div class="text-sm font-medium text-slate-800">Operations Research & Techno-Economic Network Dispatch</div>
-                                <p class="text-xs text-slate-500 mt-0.5">Models plant turndown, train cycling, potable-water storage, transmission limits, demand, energy costs, and contractual operating constraints.</p>
-                            </div>
-                            <div class="border-l-4 border-indigo-600 pl-3">
-                                <div class="text-xs font-bold uppercase text-indigo-700">Applied AI & Numerical Modeling</div>
-                                <div class="text-sm font-medium text-slate-800">Reduced-Order Hydrodynamic Models (ROM) & Forecast Ensembles</div>
-                                <p class="text-xs text-slate-500 mt-0.5">Derives fast transport-response kernels from open ocean data or offline reference simulations for rolling-horizon linear/MILP optimization; high-fidelity models (Delft3D/TELEMAC) remain validation references, not a runtime dependency.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-slate-100 bg-slate-50 p-3 rounded-lg">
-                        <div class="text-xs font-semibold text-slate-700">GPIW Target Track & Category</div>
-                        <div class="text-xs text-slate-600 mt-1">Filed under <strong class="text-sky-700">Track A (TRL 1-3)</strong> — a computational/simulation prototype, no field deployment claimed — in <strong class="text-slate-800">Category 5 (Environmental Sustainability & Water Resource Conservation)</strong>, the single category this application targets (GPIW permits one category per application).</div>
-                    </div>
-                </div>
+    <h3 style="margin-top:22px; font-size:15px;">Sensitivity (synthetic benchmark)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Axis swept</th>
+          <th class="num">Benefit at low end</th>
+          <th class="num">Benefit at high end</th>
+          <th>Reading</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Turndown 5% &rarr; 20%</td>
+          <td class="num">0.6%</td>
+          <td class="num">5.3%</td>
+          <td class="muted">More turndown &rarr; more coordination value</td>
+        </tr>
+        <tr>
+          <td>Storage &times;0.5 &rarr; &times;2</td>
+          <td class="num">17.9%</td>
+          <td class="num">19.3%</td>
+          <td class="muted">Benefit is structural, not a storage artifact</td>
+        </tr>
+        <tr>
+          <td>Dispersion &times;0.5 &rarr; &times;2</td>
+          <td class="num">24.0%</td>
+          <td class="num">14.1%</td>
+          <td class="muted">Less natural mixing &rarr; more coordination value</td>
+        </tr>
+      </tbody>
+    </table>
 
-                <!-- SWA Institutional Vectors Card -->
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center space-x-2">
-                        <span>🏛️</span>
-                        <span>Saudi Water Authority (SWA) Alignment</span>
-                    </h3>
-                    <div class="space-y-3">
-                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-sm text-slate-800">1. Arabian Gulf & Red Sea Ecosystem Safeguard</span>
-                                <span class="text-xs font-bold text-sky-600">Site-Specific Thresholds</span>
-                            </div>
-                            <p class="text-xs text-slate-600 mt-1">Reducing cumulative salinity-exposure proxies (excess salinity above ambient, calibrated from published coral/seagrass tolerance literature) in a representative multi-outfall corridor — not a claim of proven ecological damage or a certified regulatory limit; biological effects require site- and species-specific validation.</p>
-                        </div>
-                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-sm text-slate-800">2. Water Grid Reliability & Demand Satisfaction</span>
-                                <span class="text-xs font-bold text-emerald-600">100% Hourly Demand</span>
-                            </div>
-                            <p class="text-xs text-slate-600 mt-1">Guaranteeing zero water deficit by integrating municipal storage buffer constraints and transmission capacities.</p>
-                        </div>
-                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-sm text-slate-800">3. Operational Flexibility Quantification</span>
-                                <span class="text-xs font-bold text-amber-600">Contract Feasibility</span>
-                            </div>
-                            <p class="text-xs text-slate-600 mt-1">Answering: "How much flexibility (5-10% vs train cycling) is needed before environmental dispatch yields major gains?"</p>
-                        </div>
-                        <div class="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-sm text-slate-800">4. Software-First Decision Support</span>
-                                <span class="text-xs font-bold text-indigo-600">No Prototype Hardware</span>
-                            </div>
-                            <p class="text-xs text-slate-600 mt-1">The prototype requires no new hardware. A real deployment would still require site calibration, data integration, cybersecurity review, operator approval, and potentially added instrumentation (see SWA Pilot Roadmap).</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="evidence">
+      Evidence: <code>evidence/2026-08-25/benchmark/comparison.json</code> (cells <code>phase3/flex1&ndash;flex4</code>, <code>phase3_tidal/flex1&ndash;flex4</code>) &middot; <code>evidence/2026-08-25/sensitivity/sensitivity.json</code> &middot; manifest git <code>609b5b3</code>. Conditions per C1: flex4 scenario, 3.3&times; per-plant dose-coefficient spread, exposure evaluated by direct transport re-simulation.
+    </div>
+  </section>
 
-            <!-- Evaluation Criteria Breakdown -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 class="text-lg font-bold text-slate-900 mb-2">The 8 GPIW Evaluation Criteria (12.5% Each)</h3>
-                <p class="text-xs text-slate-500 mb-4">Each submission is evaluated by Technical and Board Jurors across 8 equal-weighted dimensions.</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">1. Technical Excellence</div>
-                        <div class="text-slate-600 mt-1">Rigorous linear/MILP optimization, reduced-order Green's functions, forecast ensembles.</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">2. Scalability & Feasibility</div>
-                        <div class="text-slate-600 mt-1">Software-first overlay with explicit calibration, integration, and operational-adoption requirements.</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">3. Life-Cycle Impact</div>
-                        <div class="text-slate-600 mt-1">Potential reduction in habitat-area-hours above transparent, site-specific salinity-exposure proxies (not a certified regulatory limit).</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">4. Durability & Safety</div>
-                        <div class="text-slate-600 mt-1">Hard demand and reserve constraints; performance stress-tested across current/wind forecast ensembles.</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">5. Clear Market Need</div>
-                        <div class="text-slate-600 mt-1">Solves severe localized salinity buildup in shallow marine bays housing multiple plants.</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">6. Performance Measurability</div>
-                        <div class="text-slate-600 mt-1">Clear benchmark against independent uncoordinated plant operations.</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">7. Audacious Yet Achievable</div>
-                        <div class="text-slate-600 mt-1">Multi-plant macro-environmental coordination via rolling-horizon dispatch, recomputed on an hourly/daily planning cycle.</div>
-                    </div>
-                    <div class="p-3 bg-slate-50 rounded border border-slate-200">
-                        <div class="font-bold text-sky-700">8. Long-Term Viability</div>
-                        <div class="text-slate-600 mt-1">Defensible optimization formulation and SaaS dispatch licensing model for SWA.</div>
-                    </div>
-                </div>
-            </div>
-        </section>
+  <!-- ============================= (b) ENSEMBLE ROBUSTNESS ============================= -->
+  <section id="ensemble">
+    <h2><span class="claim-id">C3</span>Robustness to forecast error (matched cost)</h2>
+    <p class="panel-lead">
+      Schedules are optimized on the nominal forecast only, and the coordinated schedule is cost-capped at the cheaper independent baseline's energy spend (cap binding). Benefit stays positive on all ensemble members.
+    </p>
 
-        <!-- SECTION 2: PROJECT CANDIDATES EVALUATOR -->
-        <section id="tab-candidates" class="space-y-6 hidden">
-            <!-- Intro Paragraph -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-xl font-bold text-slate-900 mb-2">Candidate Evaluation & Strategic Justification</h2>
-                <p class="text-slate-600 text-sm leading-relaxed">
-                    Three candidate concepts were screened against prior art, measurable impact, solo execution, and Saudi pilot relevance. The scores below are qualitative planning judgments — not measured performance or win probabilities. BrineGuard Coast was selected because its cumulative multi-outfall decision problem is less crowded than membrane-fouling PINNs and can be prototyped without new hardware.
-                </p>
-            </div>
+    <div class="grid-3">
+      <div class="stat">
+        <div class="label">Ensemble members</div>
+        <div class="value">20</div>
+        <div class="note">seed 20260825; 19 truly held-out perturbations + 1 nominal</div>
+      </div>
+      <div class="stat">
+        <div class="label">Capacity-rule benefit range</div>
+        <div class="value good">14.5–26.0%</div>
+        <div class="note">all 20 members positive</div>
+      </div>
+      <div class="stat">
+        <div class="label">Cost-rule benefit range</div>
+        <div class="value good">16.1–27.9%</div>
+        <div class="note">all 20 members positive</div>
+      </div>
+    </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <!-- Interactive Radar Chart -->
-                <div class="lg:col-span-7 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-base font-bold text-slate-900">Solopreneur Suitability Profile Comparison</h3>
-                            <span class="text-xs text-slate-500">Scale: 0 - 100</span>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="candidateRadarChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="text-xs text-slate-500 text-center mt-2">
-                        Qualitative planning scores comparing regional impact, operations research, ChemE physics, prototype hardware burden, and Saudi pilot fit.
-                    </div>
-                </div>
+    <div class="callout">
+      <strong>Interval caveat (verbatim, C3):</strong> Coordination's p95 exposure sits below the cost-rule baseline's p5; against the capacity-rule baseline the intervals touch within 0.2%.
+    </div>
 
-                <!-- Concept Quick Selector & Details Card -->
-                <div class="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
-                    <div>
-                        <h3 class="text-base font-bold text-slate-900 mb-3">Select Concept to Inspect</h3>
-                        <div class="space-y-2">
-                            <button onclick="selectConcept(1)" id="btn-concept-1" class="w-full text-left p-3 rounded-lg border border-sky-500 bg-sky-50/50 hover:bg-sky-50 transition">
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-sm text-sky-900">Concept 1: BrineGuard Coast</span>
-                                    <span class="bg-sky-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">RECOMMENDED FLAGSHIP</span>
-                                </div>
-                                <div class="text-xs text-slate-600 mt-1">Coordinated production dispatch using product-water storage — not brine storage.</div>
-                            </button>
-                            <button onclick="selectConcept(2)" id="btn-concept-2" class="w-full text-left p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition">
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-sm text-slate-800">Concept 2: NeuroDesal-PINN</span>
-                                    <span class="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded">SINGLE PLANT</span>
-                                </div>
-                                <div class="text-xs text-slate-600 mt-1">PINN dynamic RO membrane fouling & antiscalant dosing optimizer.</div>
-                            </button>
-                            <button onclick="selectConcept(3)" id="btn-concept-3" class="w-full text-left p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition">
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-sm text-slate-800">Concept 3: NF Brine Mining Cascade</span>
-                                    <span class="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded">HARDWARE INTENSIVE</span>
-                                </div>
-                                <div class="text-xs text-slate-600 mt-1">Multi-stage NF-RO membrane cascade for Mg²⁺/Li⁺ extraction.</div>
-                            </button>
-                        </div>
+    <h3 style="margin-top:20px; font-size:15px;">Held-out exposure intervals (m&sup2;&middot;kg/m&sup3;&middot;h)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th class="num">p5</th>
+          <th class="num">p50</th>
+          <th class="num">p95</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Coordinated (C)</td>
+          <td class="num">6,229.02</td>
+          <td class="num">6,896.18</td>
+          <td class="num">7,698.51</td>
+        </tr>
+        <tr>
+          <td>Capacity-rule baseline (B)</td>
+          <td class="num">7,684.50</td>
+          <td class="num">8,883.02</td>
+          <td class="num">9,699.87</td>
+        </tr>
+        <tr>
+          <td>Cost-rule baseline (B)</td>
+          <td class="num">7,875.60</td>
+          <td class="num">9,051.13</td>
+          <td class="num">9,949.33</td>
+        </tr>
+      </tbody>
+    </table>
 
-                        <!-- Dynamic Details Box -->
-                        <div id="concept-details-box" class="mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                            <!-- Populated dynamically by JS -->
-                        </div>
-                    </div>
-                    
-                    <button onclick="switchTab('tab-flagship')" class="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-lg transition text-center">
-                        Explore BrineGuard Coast Technical Engine →
-                    </button>
-                </div>
-            </div>
+    <div class="evidence">
+      Evidence: <code>evidence/2026-08-25/ensemble/ensemble.json</code> (20 members, seed 20260825; held-out p5/p50/p95) &middot; manifest git <code>609b5b3</code>. Regenerated after the audit's cost-cap correction (FREEZE.md addendum).
+    </div>
+  </section>
 
-            <!-- Comparison Table -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
-                <h3 class="text-base font-bold text-slate-900 mb-4">Detailed Technical Comparison Matrix</h3>
-                <table class="w-full text-left text-xs text-slate-700 border-collapse">
-                    <thead>
-                        <tr class="bg-slate-100 border-b border-slate-200 font-bold text-slate-800">
-                            <th class="p-3">Metric / Dimension</th>
-                            <th class="p-3 text-sky-800 bg-sky-50">Concept 1: BrineGuard Coast (Flagship)</th>
-                            <th class="p-3">Concept 2: NeuroDesal-PINN</th>
-                            <th class="p-3">Concept 3: NF Brine Mining Cascade</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr>
-                            <td class="p-3 font-semibold">GPIW Scope & Scale</td>
-                            <td class="p-3 bg-sky-50/50 font-bold text-sky-900">Regional / Multi-Plant Grid (Macro-Impact)</td>
-                            <td class="p-3">Single-Plant Vessel Level</td>
-                            <td class="p-3">Single-Facility Recovery System</td>
-                        </tr>
-                        <tr>
-                            <td class="p-3 font-semibold">Development Focus</td>
-                            <td class="p-3 bg-sky-50/50 font-medium">100% Software (MILP / Ocean Transport Surrogate)</td>
-                            <td class="p-3">90% Software / 10% Dataset Fitting</td>
-                            <td class="p-3">60% Software / 40% Process Modeling</td>
-                        </tr>
-                        <tr>
-                            <td class="p-3 font-semibold">Benchmarking Clarity</td>
-                            <td class="p-3 bg-sky-50/50 font-bold text-emerald-700">STRONG (3 causal coordination baselines + flexibility tiers)</td>
-                            <td class="p-3 text-amber-700 font-medium">LIMITED (literature curves do not validate dosing benefits)</td>
-                            <td class="p-3 text-amber-700 font-medium">MODERATE (Thermodynamic solubility)</td>
-                        </tr>
-                        <tr>
-                            <td class="p-3 font-semibold">Development Timeline</td>
-                            <td class="p-3 bg-sky-50/50 font-bold text-amber-700">5-Week Track A Sprint (Tightly Scoped)</td>
-                            <td class="p-3 text-emerald-700">8 to 10 Weeks</td>
-                            <td class="p-3">12 to 14 Weeks</td>
-                        </tr>
-                        <tr>
-                            <td class="p-3 font-semibold">Solopreneur Win Probability</td>
-                            <td class="p-3 bg-sky-50/50 font-bold text-sky-900">RECOMMENDED (best evidence-backed gap)</td>
-                            <td class="p-3 text-slate-600">LOWER (2025–2026 prior art closely matches proposed PINN)</td>
-                            <td class="p-3 text-slate-600">MODERATE (Complex CapEx)</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+  <!-- ============================= (c) PARETO ============================= -->
+  <section id="pareto">
+    <h2><span class="claim-id">C4</span>Cost&ndash;protection trade-off (published, not hidden)</h2>
+    <p class="panel-lead">
+      The full Pareto frontier is reported. No single penalty weight backs any headline claim; every point is feasible and monotone.
+    </p>
 
-        <!-- SECTION 3: FLAGSHIP DEEP-DIVE: BRINEGUARD COAST -->
-        <section id="tab-flagship" class="space-y-6 hidden">
-            <!-- Intro Paragraph -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-xl font-bold text-slate-900 mb-2">Technical Engine: Coordinated Environmental Dispatch Formulation</h2>
-                <p class="text-slate-600 text-sm leading-relaxed">
-                    <strong>BrineGuard Coast</strong> converts uncoordinated desalination production into a dynamic multi-plant environmental optimization problem. It balances hourly potable-water demand, product-water storage, transmission, and plant-operability constraints against a <strong>Reduced-Order Marine Transport Model (ROM)</strong>. The optimizer determines production rates, active train counts, optional dilution allocations, and product-water storage withdrawals. Brine is not stored: its flow and salt load follow directly from water production and recovery, not from an independently scheduled brine variable.
-                </p>
-            </div>
+    <div class="callout">
+      From <strong>28,860</strong> to <strong>32,036</strong> energy cost units, exposure falls <strong>11,538 &rarr; 8,389</strong> (a +10.7% budget buys &minus;27% exposure).
+    </div>
 
-            <!-- Mathematical Formulation Cards -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Objective Function Card -->
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="text-xs font-bold text-sky-600 uppercase tracking-wider">Optimization Objective</div>
-                        <h3 class="text-base font-bold text-slate-900 mt-1">Multi-Objective Cost & Exposure</h3>
-                        <p class="text-xs text-slate-600 mt-2">Minimizing expected operational cost, ramping penalties, and cumulative habitat-area-hours of excess exposure across a forecast-scenario ensemble. <strong>Production level is the decision variable</strong> — brine flow follows from it (see Marine Kernel card):</p>
-                        <div class="my-3 p-3 bg-slate-900 text-sky-300 font-mono text-xs rounded-lg overflow-x-auto">
-                            min Σ<sub>ω</sub> p<sub>ω</sub> { Σ<sub>i,t</sub> [ c_e(t)·E_i(P_i,t) + c_r·|ΔP_i,t| ]<br>
-                            &nbsp;+ w_exp·Σ<sub>x,t</sub> A_x·[S_x,t,ω − S_thr,x]₊·Δt }
-                        </div>
-                        <p class="text-[11px] text-slate-500">
-                            $P_i,t$ is plant $i$'s production rate (the control variable) with energy draw $E_i(P_i,t)$; $\omega$ indexes forecast scenarios (currents/tides/wind) with probability $p_\omega$. The exposure term is an auditable salinity-risk proxy — habitat cell area $A_x$ times hours above an illustrative threshold $S_{thr,x}$ — <strong>not a claim of biological damage</strong>. A CVaR term over $\omega$ is a stretch goal for worst-case robustness.
-                        </p>
-                    </div>
-                </div>
+    <h3 style="margin-top:20px; font-size:15px;">Pareto frontier (8 points)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Point</th>
+          <th class="num">Energy cost (units)</th>
+          <th class="num">Exposure (m&sup2;&middot;kg/m&sup3;&middot;h)</th>
+          <th>Feasible</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td class="num">32,035.63</td><td class="num">8,388.99</td><td>yes</td></tr>
+        <tr><td>2</td><td class="num">31,581.97</td><td class="num">8,449.34</td><td>yes</td></tr>
+        <tr><td>3</td><td class="num">31,128.31</td><td class="num">8,532.59</td><td>yes</td></tr>
+        <tr><td>4</td><td class="num">30,674.64</td><td class="num">8,742.92</td><td>yes</td></tr>
+        <tr><td>5</td><td class="num">30,220.98</td><td class="num">9,124.25</td><td>yes</td></tr>
+        <tr><td>6</td><td class="num">29,767.32</td><td class="num">9,557.83</td><td>yes</td></tr>
+        <tr><td>7</td><td class="num">29,313.66</td><td class="num">10,120.90</td><td>yes</td></tr>
+        <tr><td>8</td><td class="num">28,860.00</td><td class="num">11,538.42</td><td>yes</td></tr>
+      </tbody>
+    </table>
 
-                <!-- Hydrodynamic ROM Matrix Card -->
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="text-xs font-bold text-sky-600 uppercase tracking-wider">Transport Physics Surrogate</div>
-                        <h3 class="text-base font-bold text-slate-900 mt-1">Reduced-Order Marine Kernel</h3>
-                        <p class="text-xs text-slate-600 mt-2">Fast, scenario-indexed transport kernel ($K_\omega$) mapping brine discharge ($Q_{b,i}$) to seabed excess salinity above ambient ($S_{marine} - S_0$):</p>
-                        <div class="my-3 p-3 bg-slate-900 text-sky-300 font-mono text-xs rounded-lg overflow-x-auto">
-                            S_x,t,ω = S₀,x,t,ω + Σ<sub>i</sub> Σ<sub>τ≤t</sub> K<sub>ω</sub>(x,i,t,τ) · Q_b,i,τ<br>
-                            <span class="text-emerald-400">Q_b,i(t) = P_i(t) · (1 − r_i) / r_i</span>
-                        </div>
-                        <p class="text-[11px] text-slate-500">
-                            The time- and scenario-indexed kernel represents nonstationary currents, wind, background salinity, and cumulative far-field plume overlap from a simplified box/advection-diffusion surrogate — not a full 3D CFD run. It is derived and checked offline against open ocean data and reference simulations (e.g. Delft3D/TELEMAC cases); those remain validation references, not a runtime dependency. <strong>$Q_{b,i}(t)$ is not an independent decision variable or a stored inventory</strong>: it is the brine flow implied by plant $i$'s production $P_i(t)$ and recovery ratio $r_i$. There is no dedicated brine storage — discharge tracks production one-for-one, consistent with real SWRO flexibility (varying production/train count, not accumulating brine).
-                        </p>
-                    </div>
-                </div>
+    <div class="evidence">
+      Evidence: <code>evidence/2026-08-25/sensitivity/sensitivity.json</code> (<code>pareto_frontier</code>) &middot; manifest git <code>609b5b3</code>.
+    </div>
+  </section>
 
-                <!-- Grid & Plant Constraints Card -->
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="text-xs font-bold text-sky-600 uppercase tracking-wider">System Constraints</div>
-                        <h3 class="text-base font-bold text-slate-900 mt-1">Storage & Network Balance</h3>
-                        <p class="text-xs text-slate-600 mt-2">Explicit balance governing <strong>existing</strong> potable-water reservoirs (not new brine storage) and plant/network operational limits:</p>
-                        <div class="my-3 p-3 bg-slate-900 text-sky-300 font-mono text-xs rounded-lg overflow-x-auto">
-                            V_st(t) = V_st(t−1) + Σ<sub>i</sub> P_i(t) − Demand(t) − L(t)<br>
-                            V_min ≤ V_st(t) ≤ V_max<br>
-                            P_i,min·z_i(t) ≤ P_i(t) ≤ P_i,max·z_i(t)<br>
-                            |P_i(t) − P_i(t−1)| ≤ Ramp_i<br>
-                            Σ<sub>i</sub> T_i→j(t) ≤ Transmission_j,max
-                        </div>
-                        <p class="text-[11px] text-slate-500">
-                            $z_i(t) \in \{0,1\}$ is plant $i$'s active-train status, gating min/max load; $L(t)$ is network losses. Enforces minimum emergency reserves, plant min/max load, train ramp-rate limits, and transmission capacity between plants. <strong>Scope note:</strong> the prototype models one representative interconnected multi-plant coastal cluster (illustrative, e.g. a Jubail-style cluster) — this coordination mechanism requires plants to share transmission/a coordinating authority, which does not hold for every Saudi desalination site.
-                        </p>
-                    </div>
-                </div>
-            </div>
+  <!-- ============================= (d) REAL-COASTLINE SCREENING ============================= -->
+  <section id="coastline">
+    <h2><span class="claim-id">C5</span>Real-coastline result &amp; the screening principle</h2>
+    <p class="panel-lead">
+      On real GEBCO Red Sea bathymetry with representative-scale assumed plants and assumed tidal currents, coordination benefit is approximately zero. This is reported as a screening capability, not spun as success or failure.
+    </p>
 
-            <!-- Interactive 48-Hour Multi-Plant Dispatch Simulator -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-900">Illustrative 48-Hour Scenario Explorer</h3>
-                        <p class="text-xs text-slate-500">UI mock-up for a synthetic 3-plant coastal corridor (Jubail-style). Values below are placeholders generated by simple display rules — not prototype, solver, site, or validation results.</p>
-                    </div>
-                    <div class="mt-2 md:mt-0 bg-slate-100 p-2 rounded-lg text-xs font-mono text-slate-700">
-                        Synthetic Cluster: <span class="text-sky-700 font-bold">600,000 m³/day assumed</span> | 3 hypothetical connected plants
-                    </div>
-                </div>
+    <div class="callout null-result">
+      <strong>Null result:</strong> coordination benefit <strong>&asymp;0</strong>, specifically <strong>&minus;0.8%</strong> (capacity rule) to <strong>+0.7%</strong> (cost rule).
+    </div>
 
-                <div class="p-3 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-900 flex items-start space-x-2">
-                    <span class="text-base leading-none">⚠️</span>
-                    <span><strong>Placeholder, not prototype output.</strong> The chart and metrics below are generated by simple hand-tuned display rules built for this explainer UI (see <code>calculateOptimizedDose()</code> in source), not by the actual MILP optimizer or calibrated transport kernel described above — neither has been built yet. Treat every number on this panel as an illustration of the shape of result the real prototype should produce, not as a validated finding to cite in the submission.</span>
-                </div>
+    <div class="grid-2">
+      <div class="stat">
+        <div class="label">Water produced (hybrid domain)</div>
+        <div class="value">806,396 m&sup3;</div>
+        <div class="note">representative-scale assumed plants (100k&ndash;300k m&sup3;/day class)</div>
+      </div>
+      <div class="stat">
+        <div class="label">flex2 at this plant scale</div>
+        <div class="value null">infeasible</div>
+        <div class="note">harness turndown transform rejects flex2 (recorded limitation)</div>
+      </div>
+    </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Controls Column -->
-                    <div class="space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
-                        <div>
-                            <label class="font-bold block mb-1">Operational Flexibility Scenario</label>
-                            <select id="select-flexibility" onchange="updateDispatchSim()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-medium focus:ring-sky-500 focus:border-sky-500">
-                                <option value="tier1">Tier 1: Baseline (Fixed 100% Production, No Coordination)</option>
-                                <option value="tier2" selected>Tier 2: Limited Turndown (±10% Load + Storage Buffer)</option>
-                                <option value="tier3">Tier 3: Modular Train On/Off Cycling (Train-Level Control)</option>
-                                <option value="tier4">Tier 4: Coordinated Multi-Plant Dispatch + Forecast Ensembles</option>
-                            </select>
-                            <p class="text-[11px] text-slate-500 mt-1">Evaluates the key research question: How much flexibility is needed to cut ecological dose?</p>
-                        </div>
-                        <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span>Product-Water Storage Buffer</span>
-                                <span id="val-storage" class="text-sky-700">6 Hours</span>
-                            </div>
-                            <input type="range" id="slider-storage" min="2" max="18" step="2" value="6" oninput="updateDispatchSim()" class="w-full accent-sky-600">
-                            <p class="text-[11px] text-slate-500 mt-1">Buffers production changes during peak marine salinity sensitivity windows.</p>
-                        </div>
-                        <div>
-                            <div class="flex justify-between font-bold mb-1">
-                                <span>Exposure Penalty Weight (w_exp)</span>
-                                <span id="val-weco" class="text-emerald-700">0.75</span>
-                            </div>
-                            <input type="range" id="slider-weco" min="0.1" max="1.5" step="0.1" value="0.75" oninput="updateDispatchSim()" class="w-full accent-emerald-600">
-                            <p class="text-[11px] text-slate-500 mt-1">Illustrates the trade-off between the salinity-exposure proxy and operating cost.</p>
-                        </div>
+    <h3 style="margin-top:20px; font-size:15px;">The dose-spread screening explanation</h3>
+    <p style="font-size:14px; color:var(--muted); margin: 8px 0;">
+      Benefit requires <strong>spatial asymmetry</strong> in per-plant environmental dose coefficients <em>and</em> a <strong>feasible reallocation range</strong>. A linear-regime bound, computed ex ante from the transport kernel by reallocating production cleanest-first within plant limits, predicts both outcomes: a large bound where a large benefit was measured (synthetic, 3.3&times; dose-coefficient spread), and a small bound where &asymp;0 was measured (hybrid geometry, 1.5&times; spread with 40%-of-max turndown floors).
+    </p>
+    <p style="font-size:13px; color:var(--faint); margin: 8px 0;">
+      The ex-ante bound values (16.3% synthetic vs 4.3% hybrid) and the dose-spread figures above are documented in <code>docs/CLAIMS.md</code> C5 (diagnosis dated 2026-08-26, post-freeze; reproducible from <code>build_kernel</code> + receptor areas). They are not part of the frozen 2026-08-25 JSON bundle and are cited here for the screening explanation only.
+    </p>
 
-                        <!-- Illustrative Metrics Summary (placeholder formulas — see disclaimer above) -->
-                        <div class="pt-3 border-t border-slate-200 text-[11px] text-slate-600 space-y-1.5">
-                            <div class="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Illustrative — not measured</div>
-                            <div class="flex justify-between">
-                                <span>Illustrative Exposure Index:</span>
-                                <span id="sim-dose" class="font-bold text-sky-800">—</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>Illustrative Relative Change vs. Tier 1:</span>
-                                <span id="sim-red" class="font-bold text-emerald-800">—</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>Peak Exposure Index:</span>
-                                <span id="sim-psu" class="font-bold text-amber-800">—</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>Demand Constraint:</span>
-                                <span id="sim-deficit" class="font-bold text-slate-800">—</span>
-                            </div>
-                        </div>
-                    </div>
+    <div class="evidence">
+      Evidence: <code>evidence/2026-08-25/benchmark/comparison.json</code> (cells <code>hybrid_redsea_full/flex1</code>, <code>flex2</code>, <code>flex4</code>) &middot; manifest git <code>609b5b3</code>.
+    </div>
+  </section>
 
-                    <!-- Dynamic Chart Column -->
-                    <div class="md:col-span-2">
-                        <div class="chart-container">
-                            <canvas id="dispatchSimChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
+  <!-- ============================= (e) VALIDATION GATES ============================= -->
+  <section id="gates">
+    <h2><span class="claim-id">Verification</span>Validation gates</h2>
+    <p class="panel-lead">
+      Independent checks that every reported number is reproducible, not just asserted.
+    </p>
 
-        <!-- SECTION 4: APPLICATION PACKAGE ARCHITECT -->
-        <section id="tab-package" class="space-y-6 hidden">
-            <!-- Intro Paragraph -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-xl font-bold text-slate-900 mb-2">GPIW Application Package Blueprint</h2>
-                <p class="text-slate-600 text-sm leading-relaxed">
-                    This section is a working plan for the required 20-slide maximum pitch deck and 1–2 minute video, plus optional supporting evidence, customized for BrineGuard Coast. Final portal requirements should be rechecked before submission.
-                </p>
-            </div>
+    <div class="gate-row">
+      <span class="gate-name">Kernel &harr; independent finite-difference (FD) solver agreement</span>
+      <span class="gate-status pass">PASS &mdash; every domain incl. real coastline</span>
+    </div>
+    <div class="gate-row">
+      <span class="gate-name">Water-balance audit (zero-violation gate)</span>
+      <span class="gate-status pass">PASS &mdash; audit_pass true, zero violations on all cells</span>
+    </div>
+    <div class="gate-row">
+      <span class="gate-name">Deterministic test suite</span>
+      <span class="gate-status pass">PASS &mdash; 82 tests incl. negative tests of the auditors</span>
+    </div>
+    <div class="gate-row">
+      <span class="gate-name">Evidence regeneration</span>
+      <span class="gate-status pass">PASS &mdash; <code>make verify-evidence</code> reproduces every metric</span>
+    </div>
 
-            <!-- Pitch Deck & Video Script Tabs -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <!-- 20-Slide Deck Interactive Explorer -->
-                <div class="lg:col-span-7 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-base font-bold text-slate-900">20-Slide Technical Pitch Deck Blueprint</h3>
-                            <span class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded">Max 20 MB (PDF/PPT)</span>
-                        </div>
-                        <div id="slide-preview-box" class="p-4 rounded-lg bg-slate-950 text-white min-h-[180px] flex flex-col justify-between">
-                            <div>
-                                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                                    <span id="slide-num" class="text-xs font-mono text-sky-400 font-bold">SLIDE 01 / 20</span>
-                                    <span id="slide-cat" class="text-[10px] bg-sky-900 text-sky-200 px-2 py-0.5 rounded uppercase">Title Overview</span>
-                                </div>
-                                <h4 id="slide-title" class="text-base font-bold text-sky-100 mt-2">BrineGuard Coast: Coordinated Environmental Dispatch</h4>
-                                <p id="slide-desc" class="text-xs text-slate-300 mt-2 leading-relaxed">
-                                    Multi-plant desalination production and environmental dispatch optimization. Solving hypersaline plume overlap in Saudi coastal clusters.
-                                </p>
-                            </div>
-                            <div id="slide-criteria" class="text-[11px] text-sky-300 font-mono mt-3 pt-2 border-t border-slate-800">
-                                Target Criteria: Technical Excellence (12.5%) & Execution Capacity (12.5%)
-                            </div>
-                        </div>
+    <div class="evidence">
+      Gate status reproducible via <code>.venv/bin/python -m pytest -q</code> and <code>make verify-evidence</code> (see footer).
+    </div>
+  </section>
 
-                        <!-- Slide Navigation Grid -->
-                        <div class="grid grid-cols-5 sm:grid-cols-10 gap-1.5 mt-4">
-                            <script>
-                                for(let i=1; i<=20; i++){
-                                    document.write(`<button onclick="showSlide(${i})" id="btn-slide-${i}" class="py-1.5 text-xs font-bold rounded border ${i===1?'bg-sky-600 text-white border-sky-600':'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'} transition">${i}</button>`);
-                                }
-                            </script>
-                        </div>
-                    </div>
-                </div>
+  <!-- ============================= (f) LIMITATIONS ============================= -->
+  <section id="limitations">
+    <h2><span class="claim-id">C6</span>What is NOT claimed</h2>
+    <p class="panel-lead">
+      The following are explicitly out of scope, to keep every headline bounded.
+    </p>
 
-                <!-- 2-Minute Script Timeline -->
-                <div class="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                    <div>
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-base font-bold text-slate-900">2-Minute Video Pitch Script Timeline</h3>
-                            <span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">MP4 &le; 50 MB</span>
-                        </div>
-                        <div class="space-y-3 text-xs">
-                            <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
-                                <div class="flex justify-between font-bold text-slate-800">
-                                    <span>0:00 - 0:25: The Saudi Coastal Challenge</span>
-                                    <span class="text-sky-700">25s</span>
-                                </div>
-                                <p class="text-slate-600 mt-1">A cited systems diagram showing why multiple outfalls can create cumulative exposure that plant-by-plant assessment may miss. Do not present inferred satellite "plumes" as observations.</p>
-                            </div>
-                            <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
-                                <div class="flex justify-between font-bold text-slate-800">
-                                    <span>0:25 - 0:55: BrineGuard Engine Architecture</span>
-                                    <span class="text-sky-700">30s</span>
-                                </div>
-                                <p class="text-slate-600 mt-1">Demonstrating reduced-order ocean transport surrogates and rolling-horizon MILP integration with grid storage.</p>
-                            </div>
-                            <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
-                                <div class="flex justify-between font-bold text-slate-800">
-                                    <span>0:55 - 1:25: Operational Flexibility Results</span>
-                                    <span class="text-sky-700">30s</span>
-                                </div>
-                                <p class="text-slate-600 mt-1">Present the measured comparison among constant, independently optimized, and coordinated operation. Insert percentages only after reproducible prototype runs.</p>
-                            </div>
-                            <div class="p-2.5 rounded border border-slate-200 bg-slate-50">
-                                <div class="flex justify-between font-bold text-slate-800">
-                                    <span>1:25 - 2:00: Founder & SWA Pilot Vision</span>
-                                    <span class="text-sky-700">35s</span>
-                                </div>
-                                <p class="text-slate-600 mt-1">ChemE + Business MSc + AI credentials summary. Call to action for WTIIRA Jubail multi-plant cluster pilot.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Boundary</th>
+          <th>Stated position</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Ecological / biological outcome</td>
+          <td class="muted">Salinity-exposure proxy only; thresholds are configurable screening values</td>
+        </tr>
+        <tr>
+          <td>Site-specific accuracy</td>
+          <td class="muted">Hybrid domain = real bathymetry + assumed plants + assumed currents</td>
+        </tr>
+        <tr>
+          <td>Operational deployment</td>
+          <td class="muted">TRL 1&ndash;3 computational proof of concept</td>
+        </tr>
+        <tr>
+          <td>Autonomous plant control</td>
+          <td class="muted">Shadow / advisory mode only</td>
+        </tr>
+        <tr>
+          <td>Benefit magnitudes</td>
+          <td class="muted">Properties of the benchmark configurations, conditional per C5's screening principle</td>
+        </tr>
+      </tbody>
+    </table>
 
-            <!-- Optional Supporting Evidence Dossier Checklist -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 class="text-base font-bold text-slate-900 mb-3">Optional Supporting Evidence Dossier Checklist (Max 30 MB PDF/ZIP)</h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                    <div class="p-3 border border-slate-200 rounded-lg bg-slate-50">
-                        <div class="font-bold text-slate-800">1. MILP Optimization Code</div>
-                        <div class="text-slate-500 mt-1">Annotated Python Pyomo / SciPy script with reduced-order ocean transport matrix.</div>
-                    </div>
-                    <div class="p-3 border border-slate-200 rounded-lg bg-slate-50">
-                        <div class="font-bold text-slate-800">2. Hydrodynamic ROM Calibration</div>
-                        <div class="text-slate-500 mt-1">Transport-kernel derivation from open bathymetry (GEBCO) and current reanalysis (Copernicus Marine/HYCOM), with held-out comparison against an open reference case (e.g. TELEMAC) if time allows, plus error and mass-conservation checks — to be produced, not yet built.</div>
-                    </div>
-                    <div class="p-3 border border-slate-200 rounded-lg bg-slate-50">
-                        <div class="font-bold text-slate-800">3. Operational Benchmark</div>
-                        <div class="text-slate-500 mt-1">48-hour simulation log across 4 flexibility tiers, reporting dose reduction with stated assumptions and uncertainty range — result to be generated by the actual optimizer, not the placeholder figures in the interactive explorer.</div>
-                    </div>
-                    <div class="p-3 border border-slate-200 rounded-lg bg-slate-50">
-                        <div class="font-bold text-slate-800">4. Techno-Economic Model</div>
-                        <div class="text-slate-500 mt-1">LCOW sensitivity analysis under fluctuating hourly electricity tariffs and ramping costs.</div>
-                    </div>
-                </div>
-            </div>
-        </section>
+    <div class="evidence">
+      Bounds per <code>docs/CLAIMS.md</code> C6.
+    </div>
+  </section>
 
-        <!-- SECTION 5: SWA PILOT ROADMAP -->
-        <section id="tab-roadmap" class="space-y-6 hidden">
-            <!-- Intro Paragraph -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-xl font-bold text-slate-900 mb-2">SWA-WTIIRA Piloting & Project Execution Roadmap</h2>
-                <p class="text-slate-600 text-sm leading-relaxed">
-                    The Grand Prize winner and up to two Impact Medal winners may be considered for up to $250,000 in post-award pilot support. The roadmap below is a proposed, partner-dependent path — not committed SWA/WTIIRA funding, site access, or deployment.
-                </p>
-            </div>
+</main>
 
-            <!-- Timeline Progression Layout -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
-                <h3 class="text-base font-bold text-slate-900">Multi-Phase Execution Timeline (2026 - 2027)</h3>
+<footer>
+  <h3>Reproduction</h3>
+  <p>
+    <code>.venv/bin/python -m pytest -q</code> &mdash; runs the deterministic test suite (82 tests incl. negative tests of the auditors).<br>
+    <code>make verify-evidence</code> &mdash; regenerates every reported metric and fails on any mismatch.
+  </p>
 
-                <div class="relative border-l-2 border-sky-500 ml-4 space-y-8 pl-6">
-                    <!-- Phase 1 -->
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 bg-sky-600 text-white w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center">1</span>
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center">
-                            <h4 class="text-sm font-bold text-slate-900">Phase 1: Pre-Submission Development</h4>
-                            <span class="text-xs font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded">Aug 25 – Sept 30, 2026</span>
-                        </div>
-                        <p class="text-xs text-slate-600 mt-1">Build one synthetic/representative-corridor transport model and rolling-horizon optimizer; run the three core baselines and flexibility sensitivity; document assumptions; prepare the deck and video.</p>
-                    </div>
+  <h3>Evidence freeze</h3>
+  <p>
+    Evidence bundle frozen <strong>2026-08-25T09:45Z</strong> at git <code>41ffc83</code>; regenerated manifest git revision <code>609b5b3</code>. Post-freeze addendum <strong>2026-08-25T10:46Z</strong> documents the audit-driven ensemble cost-cap correction (see <code>FREEZE.md</code>). Any post-freeze change requires a new dated freeze entry.
+  </p>
+</footer>
+</div>
 
-                    <!-- Phase 2 -->
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 bg-slate-800 text-white w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center">2</span>
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center">
-                            <h4 class="text-sm font-bold text-slate-900">Phase 2: Technical Jury & Award Governance</h4>
-                            <span class="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">Oct 1 – Dec 7, 2026</span>
-                        </div>
-                        <p class="text-xs text-slate-600 mt-1">Administrative screening (Oct 1–10), Technical Jury evaluation and top-18 shortlisting (Oct 10–31), Board Jury review from Nov 1, and winner announcement Dec 7.</p>
-                    </div>
-
-                    <!-- Phase 3 -->
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 bg-emerald-600 text-white w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center">3</span>
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center">
-                            <h4 class="text-sm font-bold text-slate-900">Phase 3: Partner-Defined Shadow Pilot</h4>
-                            <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Q1–Q2 2027 (Post-Award)</span>
-                        </div>
-                        <p class="text-xs text-slate-600 mt-1">Subject to selection and partner agreement: obtain site/outfall, production, storage, demand, and ocean-monitoring data; calibrate the model; complete cybersecurity and operator review; run advisory schedules without controlling equipment.</p>
-                    </div>
-
-                    <!-- Phase 4 -->
-                    <div class="relative">
-                        <span class="absolute -left-[31px] top-0 bg-indigo-600 text-white w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center">4</span>
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center">
-                            <h4 class="text-sm font-bold text-slate-900">Phase 4: Verification & Scale Decision</h4>
-                            <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">Q3–Q4 2027 (Post-Award)</span>
-                        </div>
-                        <p class="text-xs text-slate-600 mt-1">Compare advisory schedules with actual operations during representative conditions. An independent verification report would determine whether to proceed to supervised control, additional corridors, or no deployment.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- FOOTER -->
-    <footer class="bg-slate-900 text-slate-400 text-xs border-t border-slate-800 py-6 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0 text-center sm:text-left">
-            <div>
-                <span class="font-bold text-white">GPIW 2026 Strategic Blueprint</span> — BrineGuard Coast Engine
-            </div>
-            <div>
-                Proposed alignment with SWA priorities; pilot scope and partnerships are not yet confirmed
-            </div>
-        </div>
-    </footer>
-
-    <!-- JAVASCRIPT LOGIC -->
-    <script>
-        // Data Structures for Candidate Concepts
-        const conceptData = {
-            1: {
-                title: "Concept 1: BrineGuard Coast (Flagship)",
-                category: "Category 5 (Environmental Sustainability & Water Resource Conservation) — single category per GPIW rules",
-                trl: "Track A (TRL 1-3): computational/simulation prototype, no field deployment claimed",
-                description: "Coordinated multi-plant desalination production and environmental dispatch optimization engine. Minimizes cumulative marine salinity exposure using a reduced-order ocean transport surrogate, subject to real potable-storage and plant turndown/ramp constraints. Brine flow follows from production — no dedicated brine storage or discharge scheduling assumed.",
-                benefits: "Target: measurable reduction in marine habitat-area-hours above an illustrative excess-salinity exposure proxy (exact % pending prototype build), zero physical CapEx, no missed water demand in simulated scenarios.",
-                feasibility: "HIGH. Pure software solution: Python MILP/SciPy dispatch optimizer + a simplified box/advection-diffusion transport surrogate driven by open bathymetry/current-reanalysis data — deliberately lighter-weight than a full 3D hydrodynamic + robust-control stack."
-            },
-            2: {
-                title: "Concept 2: NeuroDesal-PINN",
-                category: "Category 4 (Digitalization) & Category 1 (Desalination)",
-                trl: "Track A (TRL 3)",
-                description: "Physics-Informed Neural Network (PINN) embedding Solution-Diffusion and Hermia kinetics to predict vessel-level RO membrane fouling.",
-                benefits: "Potential fouling-monitoring value, but curve-fit accuracy alone cannot validate chemical or membrane-life benefits.",
-                feasibility: "Technically accessible, but closely matched by 2025–2026 PINN/Hermia prior art (Garakani & Chew 2025; Helali et al. 2025) — the sharpened novelty angle is largely pre-empted."
-            },
-            3: {
-                title: "Concept 3: NF Brine Mining Cascade",
-                category: "Category 2 (Water Reclamation & Circularity)",
-                trl: "Track A (TRL 3)",
-                description: "Multi-stage Nanofiltration and Reverse Osmosis membrane cascade for selective extraction of Magnesium (Mg²⁺) and Lithium (Li⁺) from brine.",
-                benefits: "Produces high-purity mineral commodities from desalination concentrate.",
-                feasibility: "MODERATE (65/100). Requires specialized laboratory test rigs and high CapEx validation."
-            }
-        };
-
-        // Pitch Deck Slides Database (BrineGuard Coast Focused)
-        const pitchSlides = {
-            1: { title: "BrineGuard Coast: Title & Strategic Overview", cat: "Title Overview", desc: "Coordinated Multi-Plant Desalination Production & Environmental Dispatch Strategy. Track A (TRL 1-3), Category 5 (Environmental Sustainability & Water Resource Conservation).", criteria: "Target Criteria: Technical Excellence (12.5%) & Execution Capacity (12.5%)" },
-            2: { title: "Executive Summary & Core Value Prop", cat: "Executive Summary", desc: "Solving localized hypersaline plume accumulation in Saudi coastal clusters via software-driven environmental dispatch optimization.", criteria: "Target Criteria: Clear Market Need (12.5%)" },
-            3: { title: "The Saudi Coastal Salinity Challenge", cat: "Market Challenge", desc: "Why plant-by-plant assessment may miss cumulative multi-outfall exposure in low-flushing coastal corridors (Jubail, Yanbu, Red Sea); thresholds are site- and habitat-specific, not a universal cap.", criteria: "Target Criteria: Clear Market Need (12.5%)" },
-            4: { title: "Reduced-Order Hydrodynamic Transport Formulation", cat: "Coastal Physics", desc: "Mathematical derivation of Green's function matrices converting plant discharge rates into dynamic seabed salinity spatial fields.", criteria: "Target Criteria: Technical Excellence (12.5%)" },
-            5: { title: "Grid & Plant Operational Constraint Modeling", cat: "Operations Research", desc: "Rigorous modeling of municipal storage reserves, plant min/max turndown, ramp rate limits, and hourly power tariffs.", criteria: "Target Criteria: Technical Excellence (12.5%)" },
-            6: { title: "The Core Research Question & Flexibility Tiers", cat: "System Framework", desc: "Quantifying ecological dose reduction across 4 flexibility tiers (fixed baseline, limited ±10% turndown, train cycling, multi-plant dispatch).", criteria: "Target Criteria: Technical Excellence (12.5%)" },
-            7: { title: "48-Hour Multi-Plant Simulation Results", cat: "Validation Data", desc: "Report implemented results for constant, independently optimized, and coordinated operation — without preselecting the improvement percentage. Result to be generated by the actual optimizer before submission.", criteria: "Target Criteria: Performance Measurability (12.5%)" },
-            8: { title: "Forecast Ensemble & Uncertainty Calibration", cat: "Robust Optimization", desc: "Scenario-based optimization protecting schedules against current, tidal, and wind forecast errors.", criteria: "Target Criteria: Durability & Safety (12.5%)" },
-            9: { title: "Life-Cycle Environmental & Carbon Impact", cat: "Life-Cycle Impact", desc: "Quantify the salinity-exposure proxy, production energy, cycling, curtailment, dilution water, and storage trade-offs; do not infer biodiversity outcomes without biological validation.", criteria: "Target Criteria: Life-Cycle Impact (12.5%)" },
-            10: { title: "System Robustness & Emergency Reserve Rules", cat: "Durability", desc: "Hard modeled constraints maintain minimum emergency product-water reserves; forecast-ensemble stress tests check whether schedules remain feasible.", criteria: "Target Criteria: Durability & Safety (12.5%)" },
-            11: { title: "Software-First Advisory Architecture", cat: "Deployment", desc: "Future shadow-mode integration concept, including data interfaces, site calibration, cybersecurity, operator review, and fail-safe boundaries — a concept, not a built/proven integration.", criteria: "Target Criteria: Scalability & Feasibility (12.5%)" },
-            12: { title: "Target Beneficiaries & SWA Grid Value", cat: "Market Value", desc: "Cost savings and environmental compliance value for SWA national production network and IWPP private developers.", criteria: "Target Criteria: Clear Market Need (12.5%)" },
-            13: { title: "Competitive Landscape Matrix", cat: "Benchmarking", desc: "Benchmarking BrineGuard Coast against uncoordinated steady-state dispatch and single-plant static outfall designs.", criteria: "Target Criteria: Audacious Yet Achievable Vision (12.5%)" },
-            14: { title: "Transformative Vision for Saudi Coastal Protection", cat: "Vision", desc: "Long-term vision for autonomous, ecologically aware water production grids across the Arabian Gulf and Red Sea.", criteria: "Target Criteria: Audacious Yet Achievable Vision (12.5%)" },
-            15: { title: "Prior Art, IP & Defensibility Strategy", cat: "IP Strategy", desc: "Distinguish the coordination method from plume models and generic dispatch; complete a claim-level patent search before asserting protectability.", criteria: "Target Criteria: Long-Term Viability (12.5%)" },
-            16: { title: "Business Model & SaaS Dispatch Licensing", cat: "Business Strategy", desc: "SaaS licensing model tailored for SWA national regional dispatch centers based on managed m³/day regional capacity.", criteria: "Target Criteria: Long-Term Viability (12.5%)" },
-            17: { title: "Solopreneur Execution Capacity", cat: "Founder Credentials", desc: "How the founder's BSc ChemE + MSc Business & Innovation + AI background eliminates solo project execution risks.", criteria: "Target Criteria: Execution Capacity (12.5%)" },
-            18: { title: "Alignment with KSA Vision 2030 & SWA Targets", cat: "National Fit", desc: "Direct mapping to Saudi Vision 2030 marine environmental goals, NEOM Red Sea protection, and SWA operational benchmarks.", criteria: "Target Criteria: Audacious Yet Achievable Vision (12.5%)" },
-            19: { title: "SWA-WTIIRA Post-Award Piloting Blueprint", cat: "Piloting Plan", desc: "Partner-dependent shadow pilot at an SWA/WTIIRA-designated multi-plant corridor, if selected for post-award support — not a committed site or budget.", criteria: "Target Criteria: Scalability & Feasibility (12.5%)" },
-            20: { title: "Conclusion & Call to Action", cat: "Conclusion", desc: "Final synthesis of scientific rigor, environmental impact, and readiness for pilot validation in Saudi Arabia.", criteria: "Target Criteria: Overall Synthesis" }
-        };
-
-        // Tab Switching Logic
-        function switchTab(tabId) {
-            const tabs = ['tab-fit', 'tab-candidates', 'tab-flagship', 'tab-package', 'tab-roadmap'];
-            tabs.forEach(t => {
-                const el = document.getElementById(t);
-                const nav = document.getElementById('nav-' + t);
-                if (t === tabId) {
-                    el.classList.remove('hidden');
-                    nav.classList.add('tab-active');
-                    nav.classList.remove('text-slate-500');
-                } else {
-                    el.classList.add('hidden');
-                    nav.classList.remove('tab-active');
-                    nav.classList.add('text-slate-500');
-                }
-            });
-
-            // Trigger chart updates if navigating to charts
-            if(tabId === 'tab-candidates' && !window.candidateChartRendered) {
-                renderCandidateRadarChart();
-                selectConcept(1);
-                window.candidateChartRendered = true;
-            }
-            if(tabId === 'tab-flagship' && !window.dispatchChartRendered) {
-                renderDispatchSimChart();
-                updateDispatchSim();
-                window.dispatchChartRendered = true;
-            }
-        }
-
-        // Candidate Selection Logic
-        function selectConcept(num) {
-            for(let i=1; i<=3; i++) {
-                const btn = document.getElementById(`btn-concept-${i}`);
-                if(i === num) {
-                    btn.className = "w-full text-left p-3 rounded-lg border border-sky-500 bg-sky-50/50 transition";
-                } else {
-                    btn.className = "w-full text-left p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition";
-                }
-            }
-            const details = conceptData[num];
-            document.getElementById('concept-details-box').innerHTML = `
-                <div class="font-bold text-slate-800 text-sm">${details.title}</div>
-                <div><strong class="text-slate-700">Category:</strong> ${details.category}</div>
-                <div><strong class="text-slate-700">Target Track:</strong> ${details.trl}</div>
-                <div class="mt-1 text-slate-600">${details.description}</div>
-                <div class="mt-1"><strong class="text-emerald-700">Key Impact:</strong> ${details.benefits}</div>
-                <div class="mt-1"><strong class="text-sky-700">Solopreneur Feasibility:</strong> ${details.feasibility}</div>
-            `;
-        }
-
-        // Slide Explorer Logic
-        function showSlide(num) {
-            for(let i=1; i<=20; i++) {
-                const btn = document.getElementById(`btn-slide-${i}`);
-                if(i === num) {
-                    btn.className = "py-1.5 text-xs font-bold rounded border bg-sky-600 text-white border-sky-600 transition";
-                } else {
-                    btn.className = "py-1.5 text-xs font-bold rounded border bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition";
-                }
-            }
-            const s = pitchSlides[num];
-            document.getElementById('slide-num').innerText = `SLIDE ${num < 10 ? '0'+num : num} / 20`;
-            document.getElementById('slide-cat').innerText = s.cat;
-            document.getElementById('slide-title').innerText = s.title;
-            document.getElementById('slide-desc').innerText = s.desc;
-            document.getElementById('slide-criteria').innerText = s.criteria;
-        }
-
-        // Chart 1: Candidate Suitability Radar Chart
-        function renderCandidateRadarChart() {
-            const ctx = document.getElementById('candidateRadarChart').getContext('2d');
-            window.candidateRadarChart = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: ['Regional SWA Impact', 'Operations Research', 'ChemE Physics Synergy', 'Zero CapEx Load', 'SWA Strategic Fit'],
-                    datasets: [
-                        {
-                            label: 'Concept 1: BrineGuard Coast (Flagship)',
-                            data: [98, 95, 90, 98, 96],
-                            backgroundColor: 'rgba(2, 132, 199, 0.25)',
-                            borderColor: '#0284c7',
-                            pointBackgroundColor: '#0284c7',
-                            borderWidth: 2
-                        },
-                        {
-                            label: 'Concept 2: NeuroDesal-PINN',
-                            data: [65, 75, 95, 95, 80],
-                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                            borderColor: '#10b981',
-                            pointBackgroundColor: '#10b981',
-                            borderWidth: 1.5
-                        },
-                        {
-                            label: 'Concept 3: NF Brine Mining',
-                            data: [75, 60, 90, 45, 75],
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                            borderColor: '#f59e0b',
-                            pointBackgroundColor: '#f59e0b',
-                            borderWidth: 1.5
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        r: {
-                            min: 0,
-                            max: 100,
-                            ticks: { display: false }
-                        }
-                    },
-                    plugins: {
-                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } }
-                    }
-                }
-            });
-        }
-
-        // Chart 2: 48-Hour Dynamic Multi-Plant Dispatch Chart
-        let dispatchChart = null;
-        function renderDispatchSimChart() {
-            const ctx = document.getElementById('dispatchSimChart').getContext('2d');
-            
-            const hours = Array.from({length: 24}, (_, i) => (i * 2) + 'h');
-            
-            dispatchChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: hours,
-                    datasets: [
-                        {
-                            label: 'Illustrative Baseline Exposure Index',
-                            data: [65, 72, 85, 94, 98, 92, 80, 70, 68, 78, 95, 99, 90, 75, 68, 72, 88, 96, 91, 82, 70, 64, 66, 75],
-                            borderColor: '#ef4444',
-                            borderDash: [4, 4],
-                            fill: false,
-                            tension: 0.3
-                        },
-                        {
-                            label: 'Illustrative Coordinated Exposure Index',
-                            data: calculateOptimizedDose('tier2', 6, 0.75),
-                            borderColor: '#0284c7',
-                            backgroundColor: 'rgba(2, 132, 199, 0.12)',
-                            fill: true,
-                            tension: 0.3,
-                            borderWidth: 2.5
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            title: { display: true, text: 'Illustrative exposure index (not PSU)', font: { size: 11 } },
-                            min: 20,
-                            max: 110
-                        },
-                        x: {
-                            title: { display: true, text: '48-Hour Operational & Tidal Horizon', font: { size: 11 } }
-                        }
-                    },
-                    plugins: {
-                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } }
-                    }
-                }
-            });
-        }
-
-        function calculateOptimizedDose(tier, storageHours, weco) {
-            const baseline = [65, 72, 85, 94, 98, 92, 80, 70, 68, 78, 95, 99, 90, 75, 68, 72, 88, 96, 91, 82, 70, 64, 66, 75];
-            
-            let flexFactor = 0.95;
-            if(tier === 'tier2') flexFactor = 0.82; // ±10% load turndown
-            if(tier === 'tier3') flexFactor = 0.68; // Train on/off cycling
-            if(tier === 'tier4') flexFactor = 0.55; // Multi-plant dispatch + ensembles
-
-            // Storage buffer provides flattening of peak salinity windows
-            const storageDampening = (storageHours / 18) * 0.12;
-            const ecoDampening = (weco / 1.5) * 0.10;
-
-            return baseline.map(val => {
-                if (tier === 'tier1') return val;
-                let opt = val * (flexFactor - storageDampening - ecoDampening);
-                return Math.max(25, Math.round(opt * 10) / 10);
-            });
-        }
-
-        function updateDispatchSim() {
-            const tier = document.getElementById('select-flexibility').value;
-            const storage = parseInt(document.getElementById('slider-storage').value);
-            const weco = parseFloat(document.getElementById('slider-weco').value);
-
-            document.getElementById('val-storage').innerText = storage + ' Hours';
-            document.getElementById('val-weco').innerText = weco.toFixed(2);
-
-            // UI demonstration only: these simple display rules are not a transport model or optimizer.
-            // NOT output from the actual MILP optimizer or transport kernel (neither has been built yet).
-            let doseBase = 100;
-            let redPct = 0;
-            let peakIndex = 99;
-
-            if (tier === 'tier2') { redPct = 22 + (storage*0.8) + (weco*5); peakIndex = 68; }
-            if (tier === 'tier3') { redPct = 36 + (storage*1.0) + (weco*6); peakIndex = 55; }
-            if (tier === 'tier4') { redPct = 48 + (storage*1.2) + (weco*7); peakIndex = 43; }
-
-            redPct = Math.min(65, Math.round(redPct * 10) / 10);
-            const currentDose = Math.round(doseBase * (1 - (redPct/100)));
-
-            document.getElementById('sim-dose').innerText = currentDose + ' units';
-            document.getElementById('sim-red').innerText = tier === 'tier1' ? '0% (baseline)' : `-${Math.round(redPct)}%`;
-            document.getElementById('sim-psu').innerText = `${peakIndex} / 100`;
-            document.getElementById('sim-deficit').innerText = 'Assumed feasible in mock-up (not modeled)';
-
-            if(dispatchChart) {
-                dispatchChart.data.datasets[1].data = calculateOptimizedDose(tier, storage, weco);
-                dispatchChart.update();
-            }
-        }
-    </script>
 </body>
 </html>
