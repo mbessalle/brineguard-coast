@@ -25,6 +25,12 @@
             "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/model_preflight.py\" hook",
             "timeout": 45,
             "statusMessage": "Model-identity preflight (blocks silent model fallback)"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/safety_hook.py\"",
+            "timeout": 10,
+            "statusMessage": "Safety checkpoint (key exposure, critical deletes)"
           }
         ]
       }
