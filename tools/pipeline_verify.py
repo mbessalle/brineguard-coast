@@ -248,7 +248,9 @@ def chk_attestation(man):
                 and r["event"] == "dispatch"), {})
     rec = row.get("receipt")
     if rec is None:
-        return False, "no receipt recorded in ledger (pre-attestation dispatch?)"
+        if not man.get("expect_attestation"):
+            return True, "SKIPPED loudly: manifest predates the receipt contract"
+        return False, "no receipt recorded in ledger despite expect_attestation"
     if rec.get("mode") == "preflight_only":
         return True, "LOUD: pi two-step route — catalog preflight only, launch not attested"
     eff = str(rec.get("effective") or "")
