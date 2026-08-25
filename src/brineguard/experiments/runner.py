@@ -17,10 +17,11 @@ import xarray as xr
 import yaml
 
 from brineguard.config import load_config
-from brineguard.dispatch.model import load_factor_kg_s_per_m3_h, solve_dispatch
+from brineguard.dispatch.model import constant_schedule, solve_dispatch
+from brineguard.dispatch.verify import audit_schedule
 from brineguard.domain import generate_domain
 from brineguard.reporting.plots import comparison_figure
-from brineguard.transport.kernels import build_kernel, reconstruct
+from brineguard.transport.kernels import load_or_build_kernel, reconstruct
 from brineguard.transport.solver import simulate
 from brineguard.transport.validation import kernel_agreement, validate_transport
 
@@ -42,8 +43,15 @@ def run(config_path: str | Path, run_id: str | None = None) -> Path:
     validation = validate_transport(config)
     if not validation["transport_pass"]:
         raise RuntimeError(f"Transport validation failed: {validation}")
-    kernel = build_kernel(config)
+    kernel, kernel_cache = load_or_build_kernel(config, config["run"]["kernel_cache_dir"])
     solution = solve_dispatch(config, kernel)
+    baseline = constant_schedule(config)
+    audits = {"optimized": audit_schedule(config, solution["production_m3_h"], solution["storage_m3"]),
+              "constant": audit_schedule(config, baseline["production_m3_h"], baseline["storage_m3"])}
+    validation["dispatch_audit"] = audits
+    validation["dispatch_audit_pass"] = all(audit["pass"] for audit in audits.values())
+    if not validation["dispatch_audit_pass"]:
+        raise RuntimeError(f"Water-balance audit failed: { {k: v['violations'] for k, v in audits.items()} }")
     direct, fields = simulate(config, solution["loads_kg_s"], record_full=True)
     reconstructed = reconstruct(kernel, solution["loads_kg_s"])
     replay = kernel_agreement(config, direct, reconstructed)
@@ -61,10 +69,9 @@ def run(config_path: str | Path, run_id: str | None = None) -> Path:
     ])
     schedule.to_parquet(run_dir / "schedule.parquet", index=False)
     pd.DataFrame({"hour": hours, "storage_m3": solution["storage_m3"],
+                  "storage_constant_m3": baseline["storage_m3"],
                   "demand_m3_h": config["dispatch"]["demand_m3_h"]}).to_parquet(run_dir / "storage.parquet", index=False)
-    factors = np.array([load_factor_kg_s_per_m3_h(p) for p in config["dispatch"]["plants"]])
-    constant_prod = np.tile(np.mean(config["dispatch"]["demand_m3_h"]) / len(plant_names), (len(hours), len(plant_names)))
-    constant, _ = simulate(config, constant_prod * factors[None, :])
+    constant, _ = simulate(config, baseline["loads_kg_s"])
     receptor_names = [r["name"] for r in config["domain"]["receptors"]]
     salinity = xr.Dataset({
         "optimized": (("hour", "receptor"), direct), "kernel_reconstruction": (("hour", "receptor"), reconstructed),
@@ -77,6 +84,7 @@ def run(config_path: str | Path, run_id: str | None = None) -> Path:
                attrs={"provenance": "direct optimized-schedule transport replay"}).to_netcdf(run_dir / "spatial_summary.nc")
     metrics = {
         "objective": solution["objective"], "energy_cost": solution["energy_cost"],
+        "ramp_cost": solution["ramp_cost"], "constant_energy_cost": baseline["energy_cost"],
         "exposure_proxy_m2_kg_m3_h": solution["exposure_proxy"],
         "maximum_receptor_anomaly_kg_m3": float(direct.max()),
         "constant_maximum_receptor_anomaly_kg_m3": float(constant.max()),
@@ -89,7 +97,8 @@ def run(config_path: str | Path, run_id: str | None = None) -> Path:
     _json(run_dir / "validation.json", validation)
     git_revision = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip() or "unknown"
     config_sha = hashlib.sha256(config_path.read_bytes()).hexdigest()
-    _json(run_dir / "inputs.json", {"config": str(config_path), "config_sha256": config_sha, "external_inputs": []})
+    _json(run_dir / "inputs.json", {"config": str(config_path), "config_sha256": config_sha,
+                                    "kernel_cache": kernel_cache, "external_inputs": []})
     _json(run_dir / "environment.json", {"python": sys.version, "platform": platform.platform(), "numpy": np.__version__,
           "scipy": scipy.__version__, "xarray": xr.__version__, "pyomo": pyomo.__version__})
     comparison_figure(run_dir)

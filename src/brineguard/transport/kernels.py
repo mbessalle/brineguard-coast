@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+from pathlib import Path
+
 import numpy as np
 
 from brineguard.domain import generate_domain, receptor_cells, source_cells
+
+# Bump when the kernel algorithm changes so stale cache entries can never be reused.
+KERNEL_VERSION = "gaussian-puff-image-v1"
 
 
 def _coast_face_x(wet_row: np.ndarray, dx: float) -> float:
@@ -63,6 +71,44 @@ def build_kernel(config: dict) -> np.ndarray:
                         np.sum(peaks * (np.exp(-r2 / denom) + np.exp(-r2_img / denom)))
                     )
     return kernel
+
+
+def kernel_cache_key(config: dict) -> str:
+    """Content address over exactly the inputs `build_kernel` reads.
+
+    Dispatch economics (tariffs, weights, receptor thresholds/areas) are
+    deliberately excluded so changing them reuses the cached kernel.
+    """
+    dcfg = config["domain"]
+    payload = {
+        "version": KERNEL_VERSION,
+        "grid": [dcfg["ny"], dcfg["nx"], dcfg["dx_m"], dcfg["dy_m"]],
+        "coast": [dcfg["coast_width_m"], dcfg["coast_amplitude_m"], dcfg["coast_wavelength_m"]],
+        "depth_m": dcfg["depth_m"],
+        "velocity_m_s": list(dcfg["velocity_m_s"]),
+        "dispersion_m2_s": dcfg["dispersion_m2_s"],
+        "transport_dt_s": dcfg["transport_dt_s"],
+        "sources": source_cells(config),
+        "receptors": receptor_cells(config),
+        "horizon_hours": config["dispatch"]["horizon_hours"],
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def load_or_build_kernel(config: dict, cache_dir: str | Path) -> tuple[np.ndarray, dict]:
+    key = kernel_cache_key(config)
+    cache_dir = Path(cache_dir)
+    path = cache_dir / f"{key}.npz"
+    if path.exists():
+        with np.load(path) as archive:
+            if str(archive["cache_key"]) == key:
+                return archive["kernel"], {"cache_key": key, "cache_hit": True, "path": str(path)}
+    kernel = build_kernel(config)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{key}.tmp-{os.getpid()}.npz")
+    np.savez_compressed(temporary, kernel=kernel, cache_key=np.array(key))
+    os.replace(temporary, path)
+    return kernel, {"cache_key": key, "cache_hit": False, "path": str(path)}
 
 
 def reconstruct(kernel: np.ndarray, loads_kg_s: np.ndarray) -> np.ndarray:
