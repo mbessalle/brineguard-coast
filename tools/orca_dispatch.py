@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -51,13 +50,22 @@ def _resolve_spec(spec: str) -> str:
 
 def _orca(argv: list[str], *, dry_run: bool, json_output: bool = False) -> dict | None:
     """Run an orca command, optionally parsing --json output. In --dry-run
-    mode prints the exact command and returns None."""
+    mode prints the exact command and returns None.
+
+    --json is placed as a TRAILING flag (after the subcommand args), per the
+    Orca v1.4.188 reference.
+    """
     cmd = ["orca"] + argv
     if json_output:
-        cmd.insert(1, "--json")
+        cmd.append("--json")
+    # Build the display command — always include --json when json_output
+    # would be True in live mode, so --dry-run output matches reality.
+    display_cmd = list(cmd)
+    if not json_output:
+        display_cmd.append("--json")
 
     if dry_run:
-        print(f"[dry-run] would execute: {' '.join(_shell_quote(c) for c in cmd)}")
+        print(f"[dry-run] would execute: {' '.join(_shell_quote(c) for c in display_cmd)}")
         return None
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -72,10 +80,43 @@ def _orca(argv: list[str], *, dry_run: bool, json_output: bool = False) -> dict 
     return {"_ok": proc.returncode == 0}
 
 
+def _check_ok(result: dict | None, step: str) -> None:
+    """Verify the top-level ``ok`` field is true; exit with a clear message
+    if it is not."""
+    if result is None:
+        return  # dry-run, nothing to check
+    if not result.get("ok"):
+        err = result.get("error") or result.get("message") or json.dumps(result)
+        sys.exit(f"orca error at step '{step}': {err}")
+
+
 def _shell_quote(s: str) -> str:
     if not s or any(c in s for c in " \t\n\"'$"):
         return "'" + s.replace("'", "'\\''") + "'"
     return s
+
+
+# ---------------------------------------------------------------------------
+# Pi-OpenRouter launch command
+# ---------------------------------------------------------------------------
+
+def _pi_openrouter_cmd(model: str, role_prompt_path: str) -> str:
+    """Compose the pi launch command for ``orca terminal create --command``.
+
+    Wraps pi in ``bash -lc`` so it inherits a login environment and exports
+    the OpenRouter key from the local key store.  The key never appears on
+    argv.
+    """
+    # The inner command string (inside bash single-quotes).
+    # Bash single-quotes treat every character literally, so ``\\"`` in
+    # the Python single-quoted string produces ``\"`` in the final output,
+    # which becomes a literal ``"`` inside the Python -c string.
+    bash_inside = (
+        f'cd {REPO_ROOT} && '
+        'export OPENROUTER_API_KEY="$(python3 -c \\"import sys;sys.path.insert(0,\\"tools\\");from openrouter_call import load_key;print(load_key())\\")" && '
+        f'exec pi --provider openrouter --model {model} --append-system-prompt {role_prompt_path}'
+    )
+    return f"bash -lc '{bash_inside}'"
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +161,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"[cost] route={route_name} backend={backend_name} model={model} (no cost data)")
 
     spec = _resolve_spec(args.spec)
+    # Derive a short title for the terminal from the spec (first line or truncated)
+    title = spec.strip().split("\n", 1)[0][:80]
 
     # Map backend to agent row
     if backend_name == "claude-cli":
@@ -137,42 +180,93 @@ def cmd_run(args: argparse.Namespace) -> int:
     agent = AGENTS[agent_name]
 
     if agent.get("two_step"):
-        # Step 1: terminal create with pi command
-        role_prompt = route.get("role_prompt", "")
-        if role_prompt and (rp_path := Path(role_prompt)).exists():
-            role_prompt = rp_path.read_text()
+        # --- pi-openrouter path ---
+        role_prompt_path = route.get("role_prompt", "")
 
-        # Build pi command (backend.invoke already has the template)
-        backend = config["backends"]["pi-openrouter"]
-        invoke = backend["invoke"]
-        pi_argv = [a.format(model=model, prompt=spec, role_prompt=role_prompt) for a in invoke]
+        # Step 0 — Idempotent run-create: try task-create first; only
+        # run-create if it fails for lack of a bound Run.
+        print("[pi-openrouter] step 0: ensure Run exists (idempotent)")
+        tr = _orca(
+            ["orchestration", "task-create", "--spec", spec],
+            dry_run=args.dry_run,
+            json_output=not args.dry_run,
+        )
+        if not args.dry_run and tr and not tr.get("ok"):
+            print("[pi-openrouter]   no bound Run — creating one")
+            rr = _orca(
+                ["orchestration", "run-create", "--objective", spec],
+                dry_run=False,
+                json_output=True,
+            )
+            _check_ok(rr, "run-create")
+            tr = _orca(
+                ["orchestration", "task-create", "--spec", spec],
+                dry_run=False,
+                json_output=True,
+            )
+        _check_ok(tr, "task-create")
+        if args.dry_run:
+            task_id = "<task_id>"
+        else:
+            task_id = tr["result"]["task"]["id"]
+            print(f"[pi-openrouter]   task_id={task_id}")
 
-        pi_cmd = " ".join(pi_argv)
+        # Step 1 — terminal create
+        pi_cmd = _pi_openrouter_cmd(model, role_prompt_path)
         print(f"[pi-openrouter] step 1: terminal create")
-
-        result = _orca(
-            ["terminal", "create", "--worktree", "active", "--command", pi_cmd],
+        tc = _orca(
+            [
+                "terminal", "create",
+                "--worktree", "active",
+                "--title", title,
+                "--command", pi_cmd,
+            ],
             dry_run=args.dry_run,
             json_output=not args.dry_run,
         )
         if args.dry_run:
-            print("[dry-run] step 2: terminal wait tui-idle")
-            print("[dry-run] step 3: orchestration dispatch --inject")
-            return 0
+            term_handle = "<term_handle>"
+        else:
+            _check_ok(tc, "terminal create")
+            term_handle = tc["result"]["terminal"]["handle"]
+            print(f"[pi-openrouter]   terminal handle={term_handle}")
 
-        # Step 2: wait for terminal to be idle
-        if result:
-            term_id = result.get("terminal_id") or result.get("id", "")
-            if term_id:
-                print(f"[pi-openrouter] step 2: waiting for terminal {term_id}")
-                _orca(["terminal", "wait", "tui-idle", term_id], dry_run=False)
+        # Step 2 — wait for terminal to be idle
+        print(f"[pi-openrouter] step 2: waiting for terminal (timeout 60s)")
+        tw = _orca(
+            [
+                "terminal", "wait",
+                "--terminal", term_handle,
+                "--for", "tui-idle",
+                "--timeout-ms", "60000",
+            ],
+            dry_run=args.dry_run,
+            json_output=not args.dry_run,
+        )
+        if not args.dry_run:
+            _check_ok(tw, "terminal wait")
 
-        # Step 3: dispatch --inject
+        # Step 3 — orchestration dispatch --inject
         print(f"[pi-openrouter] step 3: orchestration dispatch --inject")
-        _orca(["orchestration", "dispatch", "--inject"], dry_run=False, json_output=True)
+        dr = _orca(
+            [
+                "orchestration", "dispatch",
+                "--task", task_id,
+                "--to", term_handle,
+                "--inject",
+            ],
+            dry_run=args.dry_run,
+            json_output=not args.dry_run,
+        )
+        if args.dry_run:
+            return 0
+        _check_ok(dr, "orchestration dispatch")
+        dispatch_id = dr["result"]["dispatch"]["id"]
+        print(f"[pi-openrouter]   dispatch_id={dispatch_id}")
 
         if args.wait:
-            print("[pi-openrouter] --wait requested; would block on terminal idle (not implemented)")
+            print("[pi-openrouter] --wait requested; would block on worker_done (not implemented)")
+
     else:
         # Direct worker-start
         dispatch_cmd = list(agent["dispatch_cmd"])
@@ -198,8 +292,12 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Show task list + worker summary."""
-    print("=== orca task-list --brief ===")
-    result = _orca(["task-list", "--brief"], dry_run=args.dry_run, json_output=not args.dry_run)
+    print("=== orca orchestration task-list --brief ===")
+    result = _orca(
+        ["orchestration", "task-list", "--brief"],
+        dry_run=args.dry_run,
+        json_output=not args.dry_run,
+    )
     if args.dry_run:
         return 0
 
