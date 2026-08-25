@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrineGuard Mission Control</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --panel-2: #0f151c;
+    --border: #24313f;
+    --text: #d7e2ec;
+    --muted: #7f93a8;
+    --accent: #2dd4bf;
+    --accent-2: #38bdf8;
+    --good: #34d399;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  header {
+    padding: 40px 32px 28px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #0e1520 0%, #0b0f14 100%);
+  }
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  header .subtitle { margin: 0; color: var(--muted); font-size: 15px; }
+  .accent { color: var(--accent); }
+  main { max-width: 1060px; margin: 0 auto; padding: 32px 24px 48px; }
+  section { margin-bottom: 40px; }
+  h2 {
+    font-size: 14px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--muted); font-weight: 600; margin: 0 0 16px;
+  }
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .card .value { font-size: 30px; font-weight: 700; margin-top: 8px; color: var(--accent); }
+  .card .value.v2 { color: var(--accent-2); }
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before {
+    content: ""; position: absolute; left: 11px; top: 8px; bottom: 8px;
+    width: 2px; background: var(--border);
+  }
+  .timeline li { position: relative; padding: 0 0 20px 40px; }
+  .timeline li:last-child { padding-bottom: 0; }
+  .timeline .dot {
+    position: absolute; left: 4px; top: 4px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--panel); border: 2px solid var(--accent);
+  }
+  .timeline .pid { font-weight: 700; color: var(--accent); font-size: 14px; }
+  .timeline .pname { color: var(--text); font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  td.id { color: var(--accent-2); font-weight: 700; white-space: nowrap; width: 48px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .runs { list-style: none; margin: 0; padding: 0; }
+  .runs li {
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border);
+  }
+  .runs li:last-child { border-bottom: none; }
+  .runs .rname { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 14px; flex: 1; }
+  .runs .rdate { color: var(--muted); font-size: 12px; }
+  .badge {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 3px 9px; border-radius: 999px; font-weight: 600;
+    background: rgba(52, 211, 153, 0.12); color: var(--good);
+  }
+  .badge.failed { background: rgba(251, 191, 36, 0.12); color: var(--warn); }
+  footer {
+    border-top: 1px solid var(--border); padding: 20px 32px;
+    color: var(--muted); font-size: 13px;
+  }
+  .loading { color: var(--muted); font-size: 14px; padding: 8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BrineGuard <span class="accent">Mission Control</span></h1>
+  <p class="subtitle">Desalination brine-dispatch optimizer — live evidence dashboard</p>
+</header>
+
+<main>
+  <section>
+    <h2>Headline Numbers</h2>
+    <div id="headline" class="cards">
+      <div class="card"><div class="label">Steady currents</div><div class="value">—</div></div>
+      <div class="card"><div class="label">Tidal currents</div><div class="value v2">—</div></div>
+      <div class="card"><div class="label">Ensemble min (capacity)</div><div class="value">—</div></div>
+      <div class="card"><div class="label">Ensemble min (cost)</div><div class="value v2">—</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Phase Timeline</h2>
+    <ul id="timeline" class="timeline"><li class="loading">Loading…</li></ul>
+  </section>
+
+  <section>
+    <h2>Claims</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th>ID</th><th>Claim</th></tr></thead>
+        <tbody id="claims"><tr><td class="loading" colspan="2">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Runs</h2>
+    <ul id="runs" class="runs panel"><li class="loading">Loading…</li></ul>
+  </section>
+</main>
+
+<footer>
+  <span id="freeze">Freeze commit: —</span>
+</footer>
+
+<script>
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function renderHeadline(h) {
+    const map = [
+      [h.steady, "v"],
+      [h.tidal, "v2"],
+      [h.ensemble_min_capacity, "v"],
+      [h.ensemble_min_cost, "v2"],
+    ];
+    const cards = document.querySelectorAll("#headline .card .value");
+    map.forEach((pair, i) => { if (cards[i]) cards[i].textContent = pair[0] || "—"; });
+  }
+
+  function renderTimeline(phases) {
+    const ul = document.getElementById("timeline");
+    ul.textContent = "";
+    (phases || []).forEach(p => {
+      const li = el("li");
+      li.appendChild(el("span", "dot"));
+      const wrap = el("div");
+      wrap.appendChild(el("div", "pid", p.id));
+      wrap.appendChild(el("div", "pname", p.name));
+      li.appendChild(wrap);
+      ul.appendChild(li);
+    });
+  }
+
+  function renderClaims(claims) {
+    const tbody = document.getElementById("claims");
+    tbody.textContent = "";
+    (claims || []).forEach(c => {
+      const tr = el("tr");
+      tr.appendChild(el("td", "id", c.id));
+      tr.appendChild(el("td", "", c.text));
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderRuns(runs) {
+    const ul = document.getElementById("runs");
+    ul.textContent = "";
+    (runs || []).forEach(r => {
+      const li = el("li");
+      li.appendChild(el("span", "rname", r.name));
+      const date = r.created_utc ? String(r.created_utc).replace("T", " ").slice(0, 16) : "";
+      li.appendChild(el("span", "rdate", date));
+      const badge = el("span", "badge" + (r.status === "failed" ? " failed" : ""), r.status);
+      li.appendChild(badge);
+      ul.appendChild(li);
+    });
+  }
+
+  async function load() {
+    try {
+      const [summary, claims, runs] = await Promise.all([
+        fetch("/api/summary").then(r => r.json()),
+        fetch("/api/claims").then(r => r.json()),
+        fetch("/api/runs").then(r => r.json()),
+      ]);
+      renderHeadline(summary.headline || {});
+      renderTimeline(summary.phases || []);
+      renderClaims(claims);
+      renderRuns(runs);
+      document.getElementById("freeze").textContent =
+        "Freeze commit: " + (summary.freeze_commit || "—");
+    } catch (err) {
+      document.getElementById("timeline").innerHTML =
+        '<li class="loading">Failed to load dashboard data.</li>';
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

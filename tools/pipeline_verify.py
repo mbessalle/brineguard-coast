@@ -51,8 +51,11 @@ def _ledger_rows() -> list[dict]:
 
 def chk_plan(man):
     p = REPO / man["plan_path"]
-    ok = p.is_file() and p.stat().st_size > 500 and "Acceptance criteria" in p.read_text()
-    return ok, f"{p} sha256={_sha(p)[:12]}" if ok else f"{p} missing/thin"
+    txt = p.read_text() if p.is_file() else ""
+    missing = [a for a in AC_IDS if a not in txt]
+    ok = p.is_file() and p.stat().st_size > 500 and not missing
+    return ok, (f"{p} sha256={_sha(p)[:12]}, all AC ids present" if ok
+                else f"{p} missing/thin or lacks ACs {missing}")
 
 
 def chk_spec_fidelity(man):
@@ -70,10 +73,20 @@ def chk_ledger(man):
     return ok, f"{len(rows)} ledger rows for {man['task_id']}"
 
 
-def chk_orca_provenance(man):
+def _dispatch_record(man):
     d = _orca_json(["orchestration", "dispatch-show", "--task", man["task_id"]])
-    ok = bool(d.get("ok"))
-    return ok, ("orca confirms task+dispatch exist" if ok else f"dispatch-show failed: {str(d)[:150]}")
+    return (d.get("result") or {}).get("dispatch") or {}
+
+
+def chk_orca_provenance(man):
+    disp = _dispatch_record(man)
+    ledg = next((r for r in _ledger_rows() if r.get("dispatch_id") == man["dispatch_id"]
+                 and r["event"] == "dispatch"), {})
+    ok = (disp.get("id") == man["dispatch_id"]
+          and disp.get("task_id") == man["task_id"]
+          and disp.get("assignee_handle") == ledg.get("terminal"))
+    return ok, (f"orca dispatch id/task/assignee all match manifest+ledger ({disp.get('assignee_handle')})"
+                if ok else f"mismatch: orca={disp.get('id')}/{disp.get('assignee_handle')} vs manifest {man['dispatch_id']}")
 
 
 def chk_model_preflight(man):
@@ -90,21 +103,22 @@ def chk_prompt_delivered(man):
     spec = next((t.get("spec", "") for t in (d.get("result") or {}).get("tasks", [])
                  if t.get("id") == man["task_id"]), "")
     found = [a for a in AC_IDS if a in spec]
-    ok = len(found) == len(AC_IDS)
-    return ok, (f"orca-stored task spec ({len(spec)} chars) carries all {len(AC_IDS)} AC ids"
-                if ok else f"task spec carries only {found}")
+    spec_hash = hashlib.sha256(spec.encode()).hexdigest()
+    ok = len(found) == len(AC_IDS) and spec_hash == man["spec_sha256"]
+    return ok, (f"orca-stored spec byte-identical to hashed spec file, all {len(AC_IDS)} AC ids"
+                if ok else f"ACs found {len(found)}/8, orca-spec hash {'==' if spec_hash==man['spec_sha256'] else '!='} manifest")
 
 
 def chk_worker_done(man):
-    rows = [r for r in _ledger_rows() if r.get("event") == "wait_result"
-            and r.get("dispatch_id") == man["dispatch_id"]]
-    ok = any(r.get("rc") == 0 for r in rows)
-    return ok, (f"wait_result rc=0 recorded" if ok else f"no rc=0 wait_result for {man['dispatch_id']}")
+    disp = _dispatch_record(man)  # Orca is the source of truth, not our ledger
+    ok = disp.get("status") == "completed" and disp.get("completed_at")
+    return ok, (f"orca dispatch status=completed at {disp.get('completed_at')}"
+                if ok else f"orca dispatch status={disp.get('status')!r}")
 
 
 def chk_envelope(man):
     proc = subprocess.run([sys.executable, str(REPO / "adws" / "gates.py"),
-                           "json", "adw_data/missioncontrol/envelope.json"],
+                           "json", man.get("envelope_path", "adw_data/missioncontrol/envelope.json")],
                           capture_output=True, text=True)
     return proc.returncode == 0, f"gates.py json rc={proc.returncode}"
 
@@ -120,10 +134,15 @@ def chk_stdlib_only(man):
     src = (REPO / "app/missioncontrol/server.py").read_text()
     import sys as _s
     bad = []
-    for m in re.finditer(r"^\s*(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_]*)", src, re.M):
-        name = m.group(1)
-        if name not in _s.stdlib_module_names:
-            bad.append(name)
+    for m in re.finditer(r"^\s*import\s+(.+)|^\s*from\s+([a-zA-Z_][a-zA-Z0-9_.]*)", src, re.M):
+        names = ([n.strip().split(" as ")[0].split(".")[0]
+                  for n in m.group(1).split(",")] if m.group(1)
+                 else [m.group(2).split(".")[0]])
+        for name in names:
+            if name and name not in _s.stdlib_module_names:
+                bad.append(name)
+    if "importlib" in src or "__import__" in src:
+        bad.append("dynamic-import-present")
     return not bad, ("stdlib-only imports" if not bad else f"non-stdlib imports {bad}")
 
 
@@ -168,14 +187,12 @@ def chk_server(man):
 
 
 def chk_duration(man):
-    rows = _ledger_rows()
-    t0 = next(r["ts"] for r in rows if r.get("dispatch_id") == man["dispatch_id"]
-              and r["event"] == "dispatch")
-    t1 = next(r["ts"] for r in rows if r.get("dispatch_id") == man["dispatch_id"]
-              and r["event"] == "wait_result" and r.get("rc") == 0)
+    disp = _dispatch_record(man)  # Orca timestamps, not orchestrator-written ones
     from datetime import datetime
-    secs = (datetime.fromisoformat(t1) - datetime.fromisoformat(t0)).total_seconds()
-    return secs < man["duration_budget_s"], f"build took {secs:.0f}s (budget {man['duration_budget_s']}s)"
+    t0 = datetime.fromisoformat(disp["created_at"])
+    t1 = datetime.fromisoformat(disp["completed_at"])
+    secs = (t1 - t0).total_seconds()
+    return 0 < secs < man["duration_budget_s"], f"build took {secs:.0f}s per orca record (budget {man['duration_budget_s']}s)"
 
 
 def chk_cost(man):
