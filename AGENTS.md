@@ -7,13 +7,15 @@ Coast, a desalination brine-dispatch optimizer; **BUILD_PLAN.md is canonical**.
 ## Your job
 
 1. Implement **exactly** the dispatched task spec. Do not expand scope, refactor
-   unrelated code, or "improve" things you weren't asked to touch.
+   unrelated code, or "improve" things you weren't asked to touch. Do not build
+   speculative abstractions for future or unconfirmed requirements.
 2. Before reporting done, run the deterministic gates yourself:
    - `.venv/bin/python -m pytest -q` (must be green; suite takes ~2 s)
    - `.venv/bin/python adws/gates.py quality --python .venv/bin/python`
 3. Write a handoff envelope — JSON `{"status": "...", "summary": "...",
    "changed_files": [...]}` — to the session's `adw_data/sessions/<id>/context_handoff/`
-   directory if your task spec names one.
+   directory if your task spec names one. Keep the summary concise: state what
+   changed, without narrative detail.
 4. If dispatched through Orca with an injected lifecycle preamble, that preamble
    governs `worker_done` reporting — follow it exactly, report once, then idle.
 5. Blocked on a genuine decision? Ask (Orca `ask`) or report failure honestly.
