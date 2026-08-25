@@ -9,7 +9,7 @@ def load_factor_kg_s_per_m3_h(plant: dict) -> float:
     return brine_m3_per_m3 * plant["brine_salinity_anomaly_kg_m3"] / 3600.0
 
 
-def solve_dispatch(config: dict, kernel: np.ndarray) -> dict:
+def solve_dispatch(config: dict, kernel: np.ndarray, cost_cap: float | None = None) -> dict:
     cfg = config["dispatch"]
     plants, receptors = cfg["plants"], config["domain"]["receptors"]
     n_i, n_t, n_r = len(plants), cfg["horizon_hours"], len(receptors)
@@ -50,11 +50,13 @@ def solve_dispatch(config: dict, kernel: np.ndarray) -> dict:
                         for i in range(n_i) for tau in range(t + 1))
         return model.exceedance[r, t] >= predicted - receptors[r]["threshold_kg_m3"]
     m.exposure = pyo.Constraint(m.R, m.T, rule=exposure_rule)
-    energy = sum(cfg["tariff"][t] * plants[i]["energy_kwh_m3"] * m.production[i, t]
-                 for i in range(n_i) for t in range(n_t))
+    energy_expr = sum(cfg["tariff"][t] * plants[i]["energy_kwh_m3"] * m.production[i, t]
+                      for i in range(n_i) for t in range(n_t))
+    if cost_cap is not None:
+        m.cost_cap = pyo.Constraint(expr=energy_expr <= cost_cap)
     ramp_cost = cfg["ramp_weight"] * sum(m.ramp[i, t] for i in range(n_i) for t in range(n_t))
     exposure = sum(receptors[r]["area_m2"] * m.exceedance[r, t] for r in range(n_r) for t in range(n_t))
-    m.objective = pyo.Objective(expr=energy + ramp_cost + cfg["exposure_weight"] * exposure)
+    m.objective = pyo.Objective(expr=energy_expr + ramp_cost + cfg["exposure_weight"] * exposure)
     result = pyo.SolverFactory("appsi_highs").solve(m)
     if result.solver.termination_condition != pyo.TerminationCondition.optimal:
         raise RuntimeError(f"HiGHS did not find an optimum: {result.solver.termination_condition}")
@@ -64,7 +66,7 @@ def solve_dispatch(config: dict, kernel: np.ndarray) -> dict:
         "production_m3_h": production, "storage_m3": storage,
         "loads_kg_s": production * factors[None, :],
         "objective": float(pyo.value(m.objective)),
-        "energy_cost": float(pyo.value(energy)), "ramp_cost": float(pyo.value(ramp_cost)),
+        "energy_cost": float(pyo.value(energy_expr)), "ramp_cost": float(pyo.value(ramp_cost)),
         "exposure_proxy": float(pyo.value(exposure)),
         "termination_condition": str(result.solver.termination_condition), "solver": "HiGHS via Pyomo appsi",
     }
