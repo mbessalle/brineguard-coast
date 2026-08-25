@@ -81,6 +81,8 @@ def _strategy_b(cfg_sha256: str, config: dict, kernel: np.ndarray, rule: str) ->
         "water_produced_m3": float(result["production_m3_h"].sum()),
         "audit_pass": audit["pass"],
         "audit_violations": audit["violations"],
+        "production_m3_h": result["production_m3_h"],
+        "loads_kg_s": result["loads_kg_s"],
         **_exposure_metrics(config, rec),
     }
 
