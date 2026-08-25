@@ -59,7 +59,7 @@ tiers:
 # A route = backend + model. Re-verify with `python3 tools/probe.py` and
 # re-check pricing via `python3 tools/openrouter_call.py models <filter>`
 # before trusting numbers. Keys: gitignored .env (OPENROUTER_API_KEY),
-# .env.gemini_key; codex uses its own auth.
+# .env.gemini_key; OpenAI via pi openai-codex OAuth (~/.pi/agent/auth.json).
 # ---------------------------------------------------------------------------
 # Model-selection policy (mandatory for any route change):
 # 1. FRESHNESS: tools/model_freshness.py diffs pinned routes vs the live
@@ -79,8 +79,11 @@ backends:
     invoke: interactive
   claude-cli:
     invoke: [claude, -p, "{prompt}", --model, "{model}", --output-format, text]
-  codex-cli:
-    invoke: [codex, exec, --skip-git-repo-check, -m, "{model}", "{prompt}"]
+  pi-openai-codex:  # full agentic coder on the OpenAI ChatGPT subscription
+    # OAuth tokens in ~/.pi/agent/auth.json (pi /login, provider openai-codex);
+    # $0 marginal cost. Replaces the retired codex-cli backend (user decision).
+    invoke: [pi, --provider, openai-codex, --model, "{model}", -p, --no-session,
+             --append-system-prompt, "{role_prompt}", "{prompt}"]
   pi-openrouter:  # full agentic coder: read/bash/edit/write tools
     invoke: [pi, --provider, openrouter, --model, "{model}", -p, --no-session,
              --append-system-prompt, "{role_prompt}", "{prompt}"]
@@ -91,9 +94,10 @@ backends:
 routes:
   planner:              {backend: session,        model: claude-fable-5}
   reviewer:             {backend: session,        model: claude-fable-5}
-  # Default independent reviewer: SOTA-tier on the codex subscription ($0
-  # marginal; reads AGENTS.md natively). kimi kept for /fh-debate diversity.
-  reviewer_independent: {backend: codex-cli,      model: gpt-5.6-sol}
+  # Default independent reviewer: SOTA-tier on the OpenAI subscription via pi
+  # ($0 marginal). kimi kept for /fh-debate diversity.
+  reviewer_independent: {backend: pi-openai-codex, model: gpt-5.6-sol,
+                         role_prompt: adws/prompts/reviewer.md}
   reviewer_kimi:        {backend: openrouter-api, model: moonshotai/kimi-k3,
                          usd_per_m_in: 3.00, usd_per_m_out: 15.00,
                          role_prompt: agent-system-prompt.md}  # SOTA comms contract as system prompt
@@ -104,7 +108,7 @@ routes:
   builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
                          usd_per_m_in: 0.52, usd_per_m_out: 1.04,
                          role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)
-  builder_escalation:   {backend: codex-cli,      model: gpt-5.6-sol,
+  builder_escalation:   {backend: pi-openai-codex, model: gpt-5.6-sol,
                          role_prompt: adws/prompts/builder.md}   # subscription, no per-token cost
   scout:                {backend: pi-openrouter,  model: deepseek/deepseek-v4-flash,
                          usd_per_m_in: 0.056, usd_per_m_out: 0.11,
@@ -184,7 +188,7 @@ routing:
       - plan_contradicted_by_diff
       - repeated_identical_failure   # same gate fails the same way twice
     # Model-escalation ladder (mirrors Orca's 3-strike circuit breaker):
-    # builder (deepseek-v4-pro) -> builder_escalation (codex/gpt-5.5)
+    # builder (deepseek-v4-pro) -> builder_escalation (pi-openai-codex/gpt-5.6-sol)
     # -> planner (Tier 1 structural rethink). Retries stay on the same rung
     # with exact stderr only; a rung change resets the retry budget once.
     model_escalation: [builder, builder_escalation, planner]

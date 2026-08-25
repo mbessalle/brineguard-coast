@@ -34,9 +34,8 @@ def gemini_key() -> str:
 BACKENDS: dict[str, dict] = {
     "claude":     {"argv": ["claude", "-p", "--model", "{model}", "{prompt}"],
                    "model": "haiku", "env": None},
-    "codex":      {"argv": ["codex", "exec", "--skip-git-repo-check", "{prompt}"],
-                   "model": "(codex default)", "env": None},
-    "codex-sol":  {"argv": ["codex", "exec", "--skip-git-repo-check", "-m", "{model}", "{prompt}"],
+    "pi-codex":   {"argv": ["pi", "--provider", "openai-codex", "--model", "{model}",
+                            "-p", "--no-session", "{prompt}"],
                    "model": "gpt-5.6-sol", "env": None},
     "pi":         {"argv": ["pi", "--provider", "openrouter", "--model", "{model}",
                             "-p", "--no-session", "{prompt}"],

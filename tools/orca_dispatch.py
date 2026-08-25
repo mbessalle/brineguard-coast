@@ -100,19 +100,18 @@ def _shell_quote(s: str) -> str:
 # Pi-OpenRouter launch command
 # ---------------------------------------------------------------------------
 
-def _pi_openrouter_cmd(model: str, role_prompt_path: str) -> str:
+def _pi_openrouter_cmd(model: str, role_prompt_path: str, provider: str = "openrouter") -> str:
     """Compose the pi launch command for ``orca terminal create --command``.
 
     Nested inline quoting through terminal-create -> bash -> python proved
     fragile (two live failures), so the launch is written to a small script
-    file and the terminal simply runs ``bash <script>``. The key is exported
-    inside the script via tools/openrouter_call.py:load_key and never appears
-    on argv or in this process's output.
+    file and the terminal simply runs ``bash <script>``. For the openrouter
+    provider the key is exported inside the script via
+    tools/openrouter_call.py:load_key and never appears on argv; the
+    openai-codex provider needs no key (OAuth in ~/.pi/agent/auth.json).
     """
     import tempfile
-    script = (
-        "#!/usr/bin/env bash\n"
-        f"cd {REPO_ROOT} || exit 1\n"
+    key_export = (
         "export OPENROUTER_API_KEY=\"$(python3 - <<'PYEOF'\n"
         "import sys\n"
         "sys.path.insert(0, 'tools')\n"
@@ -120,7 +119,12 @@ def _pi_openrouter_cmd(model: str, role_prompt_path: str) -> str:
         "print(load_key())\n"
         "PYEOF\n"
         ")\"\n"
-        f"exec pi --provider openrouter --model {model} --append-system-prompt {role_prompt_path}\n"
+    ) if provider == "openrouter" else ""
+    script = (
+        "#!/usr/bin/env bash\n"
+        f"cd {REPO_ROOT} || exit 1\n"
+        f"{key_export}"
+        f"exec pi --provider {provider} --model {model} --append-system-prompt {role_prompt_path}\n"
     )
     fd, path = tempfile.mkstemp(prefix="orca_dispatch_launch_", suffix=".sh")
     with open(fd, "w", encoding="utf-8") as f:
@@ -136,13 +140,14 @@ AGENTS: dict[str, dict] = {
         "description": "Claude Code agent via orca worker-start",
         "dispatch_cmd": ["worker-start", "--agent", "claude"],
     },
-    "codex": {
-        "description": "Codex agent via orca worker-start",
-        "dispatch_cmd": ["worker-start", "--agent", "codex"],
-    },
     "pi-openrouter": {
         "description": "pi with OpenRouter (two-step: terminal create + orchestration dispatch --inject)",
         "two_step": True,
+    },
+    "pi-openai-codex": {
+        "description": "pi on the OpenAI ChatGPT subscription OAuth (two-step, provider openai-codex)",
+        "two_step": True,
+        "pi_provider": "openai-codex",
     },
 }
 
@@ -176,14 +181,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     # Map backend to agent row
     if backend_name == "claude-cli":
         agent_name = "claude"
-    elif backend_name == "codex-cli":
-        agent_name = "codex"
     elif backend_name == "pi-openrouter":
         agent_name = "pi-openrouter"
+    elif backend_name == "pi-openai-codex":
+        agent_name = "pi-openai-codex"
     else:
         sys.exit(
             f"route '{route_name}' uses backend '{backend_name}' which has no "
-            f"Orca agent mapping. Supported backends: claude-cli, codex-cli, pi-openrouter."
+            f"Orca agent mapping. Supported backends: claude-cli, pi-openrouter, pi-openai-codex."
         )
 
     agent = AGENTS[agent_name]
@@ -221,7 +226,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"[pi-openrouter]   task_id={task_id}")
 
         # Step 1 — terminal create
-        pi_cmd = _pi_openrouter_cmd(model, role_prompt_path)
+        pi_cmd = _pi_openrouter_cmd(model, role_prompt_path,
+                                    provider=agent.get("pi_provider", "openrouter"))
         print(f"[pi-openrouter] step 1: terminal create")
         tc = _orca(
             [
