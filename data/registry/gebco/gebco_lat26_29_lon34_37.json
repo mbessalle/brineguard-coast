@@ -1,0 +1,13 @@
+{
+  "source_url": "https://erddap.ifremer.fr/erddap/griddap/gebco2021.nc?elevation%5B(26):1:(29)%5D%5B(34):1:(37)%5D",
+  "bbox": [
+    26,
+    29,
+    34,
+    37
+  ],
+  "sha256": "883904f086bfedd227ddf5d01fb5c16be1bdfa97022de04e29e139bc76aefccf",
+  "size_bytes": 1056768,
+  "retrieved_at_utc": "2026-08-25T01:15:56.713085+00:00",
+  "license": "GEBCO 2025 grid, public domain attribution required"
+}

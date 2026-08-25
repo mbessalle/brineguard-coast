@@ -73,3 +73,35 @@ python3 tools/fanout.py --prompt "x" --dry-run                # inspect planned 
 Deterministic session-start orientation (git state, memory index, docs, agent CLI +
 Orca presences, standing orders). Run automatically by the SessionStart hook in
 `.claude/settings.json`; callable manually any time.
+
+## fetch_gebco.py
+
+Download a GEBCO bathymetry subset for a bounding box as netCDF via a public
+ERDDAP server (no auth). Saves under `data/registry/gebco/` with a provenance JSON
+sidecar (sha256, bbox, retrieval time, license).
+
+```bash
+python3 tools/fetch_gebco.py                                    # default Red Sea corridor
+python3 tools/fetch_gebco.py --bbox 26 29 34 37 -o my_bathy.nc
+python3 tools/fetch_gebco.py --url-template "https://HOST/erddap/griddap/DS.nc?elevation[({lat_min}):1:({lat_max})][({lon_min}):1:({lon_max})]"
+```
+
+Default ERDDAP endpoint: IFREMER (gebco2021). Override with `--url-template` to
+point at a different server or a newer GEBCO release (e.g. GEBCO 2025 when available).
+Sanity-prints elevation min/max after download; Red Sea depths should reach below
+−1000 m.
+
+## fetch_cmems.py
+
+Copernicus Marine currents fetcher. Requires the `copernicusmarine` Python package
+and valid credentials (env vars or `~/.copernicusmarine` config). When either is
+missing the script prints precise setup instructions and exits with code 2 — this
+is the expected outcome until credentials are provisioned.
+
+```bash
+python3 tools/fetch_cmems.py --dataset-id <ID> --bbox 26 29 34 37 --start 2024-01-01 --end 2024-01-02
+```
+
+Find Red Sea product IDs at https://data.marine.copernicus.eu (filter by region =
+"Red Sea", variable = "sea_water_velocity"). On success saves under
+`data/registry/cmems/` with a provenance JSON sidecar.
