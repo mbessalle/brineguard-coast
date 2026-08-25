@@ -36,6 +36,20 @@ This repo runs a Super Simple Software Factory (`adws/SSSF_SPEC.md`; routing in
   availability in the actual catalog/CLI. When grepping a catalog, list the
   whole family — never filter by a guessed version substring.
 
+- **Precedence when rules conflict:** evidence integrity > the current task's
+  explicit contract > deterministic gates > scope > latency/concision. Never
+  weaken a higher rule silently to meet a lower one — say PARTIAL or
+  VERIFICATION-PENDING instead. User-supplied and repo-authoritative context
+  count as evidence (no redundant re-retrieval); after one failed bounded
+  retrieval, give the known answer labeled UNVERIFIED and name the missing source.
+
+- **Review labels are load-tested words.** A thinking-low or wording-scoped
+  pass is a WORDING-CHECK and may never be reported as adversarial,
+  independent, agreed, or final. "Final/agreed" requires an adversarial pass
+  (rewarded-per-flaw framing, thinking medium+) whose prompt embedded the
+  claim sources. Name the exact check performed ("character-count verified"),
+  never a bare "verified".
+
 - Reusable tools over ad-hoc snippets: check `tools/README.md` first; extend a
   template-table tool (e.g. `tools/probe.py`) rather than writing a one-off check.
 - Run artifacts follow the contract in `src/brineguard/experiments/runner.py`;

@@ -62,6 +62,8 @@ Red Sea claim scoped to "in our experiments"):
 >
 > The kernel also yields a screening test. Coordination pays only where plants differ in dose per cubic meter produced and have room to shift production. Both conditions are computable before deployment, and in our experiments the prediction held on real Red Sea bathymetry.
 
-**Sol review recipe (fast, ~20s):** `pi --provider openai-codex --model gpt-5.6-sol --thinking low --no-extensions -p --no-session --no-tools "<prompt>"` (allowlisted, no permission wall).
+**Review recipes (labels are binding, see CLAUDE.md):**
+- WORDING-CHECK (~20s): `pi --provider openai-codex --model gpt-5.6-sol --thinking low --no-extensions -p --no-session --no-tools "<prompt>"`. Style/structure only. May never be reported as adversarial/agreed/final.
+- ADVERSARIAL (2-9 min, run in background, timeout 560s): same but `--thinking medium`, rewarded-per-flaw prompt, claim sources (CLAIMS.md excerpts) embedded in the prompt. Required before any answer is marked FINAL. Register every call via `tools/agent_io_log.sh` (agent-io branch).
 
-**Operating mode (user-mandated):** user pastes question -> ONE short message back with final text + char count, code-verified, contract style (no em dashes, no semicolons), claims-bounded per docs/CLAIMS.md. Sol review folded into same turn only for technical-risk answers.
+**Operating mode (user-mandated):** user pastes question -> ONE short message back with final text + char count (character-count verified by code), contract style (no em dashes, no semicolons), claims-bounded per docs/CLAIMS.md. Technical-risk = any quantitative, scientific, eligibility, provenance, or performance claim; when unsure, treat as technical-risk. Technical-risk answers get the ADVERSARIAL pass before FINAL; if it cannot finish in the turn, reply VERIFICATION-PENDING with the draft rather than silently narrowing the check.
