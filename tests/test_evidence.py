@@ -35,7 +35,7 @@ def test_make_evidence_mini_bundle(tmp_path, monkeypatch):
     assert len(tm["config_sha256s"]) >= 1
     assert isinstance(tm["artifact_sha256s"], dict)
     assert len(tm["artifact_sha256s"]) >= 1
-    assert set(tm["tool_versions"].keys()) == {"python", "numpy", "pyomo"}
+    assert set(tm["tool_versions"].keys()) == {"python", "numpy", "pyomo", "scipy"}
     # Every sha256 is a 64-char hex string.
     for v in tm["config_sha256s"].values():
         assert len(v) == 64 and all(c in "0123456789abcdef" for c in v)
@@ -107,3 +107,36 @@ def test_verify_evidence_fails_on_tampered_metric(tmp_path):
     with pytest.raises(SystemExit) as exc:
         verify_evidence(bundle_dir)
     assert exc.value.code == 1
+
+def test_manifest_enrichment_shape(tmp_path):
+    """Enriched manifest: commands, scipy version, repo-relative paths."""
+    output_root = tmp_path / "evidence"
+    make_evidence(
+        output_root=str(output_root),
+        _benchmark_configs=["configs/first_slice.yaml"],
+        _ensemble_config_path="configs/first_slice.yaml",
+        _ensemble_n_members=3,
+        _sensitivity_config_path="configs/first_slice.yaml",
+        _sensitivity_n_points=3,
+    )
+
+    tm = json.loads((output_root / "manifest.json").read_text())
+
+    # scipy added to tool_versions.
+    assert tm["tool_versions"]["scipy"]
+
+    # Commands recorded for every section that ran.
+    assert set(tm["commands"].keys()) == {"bundle", "benchmark", "ensemble", "sensitivity"}
+    assert tm["commands"]["bundle"] == ".venv/bin/python -m brineguard make-evidence"
+    assert tm["commands"]["benchmark"] is not None
+    assert tm["commands"]["ensemble"] is not None
+    assert tm["commands"]["sensitivity"] is not None
+
+    # Config paths stored repo-relative (never absolute).
+    assert tm["benchmark_configs"] == ["configs/first_slice.yaml"]
+    assert tm["ensemble_config_path"] == "configs/first_slice.yaml"
+    assert tm["sensitivity_config_path"] == "configs/first_slice.yaml"
+    assert set(tm["config_sha256s"].keys()) == {"configs/first_slice.yaml"}
+
+    # Repo-relative artifact map carries the same sha256s as artifact_sha256s.
+    assert sorted(tm["artifact_paths_repo"].values()) == sorted(tm["artifact_sha256s"].values())

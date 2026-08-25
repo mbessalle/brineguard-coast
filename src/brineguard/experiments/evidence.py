@@ -31,6 +31,14 @@ def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _repo_rel(path: Path, root: Path) -> str:
+    """POSIX path of ``path`` relative to ``root``, else ``str(path)``."""
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def _git_dirty() -> bool:
     """True if the working tree has uncommitted changes."""
     r = subprocess.run(
@@ -108,8 +116,9 @@ def make_evidence(output_root: str = "evidence",
         )
 
     # --- top-level manifest ---
+    _root = Path.cwd()
     config_sha256s = {
-        str(c): _file_sha256(c) for c in existing
+        _repo_rel(c, _root): _file_sha256(c) for c in existing
     }
     artifact_sha256s: dict[str, str] = {}
     for subdir in (benchmark_dir, ensemble_dir, sensitivity_dir):
@@ -126,6 +135,34 @@ def make_evidence(output_root: str = "evidence",
         pyomo_ver = _pyomo.__version__
     except Exception:
         pyomo_ver = "unknown"
+    try:
+        import scipy as _scipy
+        scipy_ver = _scipy.__version__
+    except Exception:
+        scipy_ver = "unknown"
+
+    benchmark_configs_rel = [_repo_rel(c, _root) for c in existing]
+    artifact_paths_repo = {
+        _repo_rel(bundle_dir / rel, _root): sha
+        for rel, sha in artifact_sha256s.items()
+    }
+
+    _bundle_cmd = ".venv/bin/python -m brineguard make-evidence"
+    _bench_cmd = None
+    if existing:
+        _bench_cmd = (".venv/bin/python -m brineguard run-benchmark "
+                      + " ".join(f"-c {_repo_rel(c, _root)}" for c in existing)
+                      + f" --run-id benchmark --output-root {bundle_dir}")
+    _ens_cmd = None
+    if ensemble_dir:
+        _ens_cmd = (".venv/bin/python -m brineguard run-ensemble "
+                    f"-c {_repo_rel(ens_path, _root)} --members {_ensemble_n_members} "
+                    f"--seed 20260825 --run-id ensemble --output-root {bundle_dir}")
+    _sens_cmd = None
+    if sensitivity_dir:
+        _sens_cmd = (".venv/bin/python -m brineguard run-sensitivity "
+                     f"-c {_repo_rel(sens_path, _root)} --n-points {_sensitivity_n_points} "
+                     f"--run-id sensitivity --output-root {bundle_dir}")
 
     manifest: dict = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -133,16 +170,24 @@ def make_evidence(output_root: str = "evidence",
         "dirty_tree": _git_dirty(),
         "config_sha256s": config_sha256s,
         "artifact_sha256s": artifact_sha256s,
+        "artifact_paths_repo": artifact_paths_repo,
+        "commands": {
+            "bundle": _bundle_cmd,
+            "benchmark": _bench_cmd,
+            "ensemble": _ens_cmd,
+            "sensitivity": _sens_cmd,
+        },
         "tool_versions": {
             "python": sys.version.split()[0],
             "numpy": _np.__version__,
             "pyomo": pyomo_ver,
+            "scipy": scipy_ver,
         },
         "pending_configs": pending,
-        "benchmark_configs": [str(c) for c in existing],
-        "ensemble_config_path": str(ens_path) if ensemble_dir else None,
+        "benchmark_configs": benchmark_configs_rel,
+        "ensemble_config_path": _repo_rel(ens_path, _root) if ensemble_dir else None,
         "ensemble_n_members": _ensemble_n_members,
-        "sensitivity_config_path": str(sens_path) if sensitivity_dir else None,
+        "sensitivity_config_path": _repo_rel(sens_path, _root) if sensitivity_dir else None,
         "sensitivity_n_points": _sensitivity_n_points,
     }
     _json(Path(output_root) / "manifest.json", manifest)

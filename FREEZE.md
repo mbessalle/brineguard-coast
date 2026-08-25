@@ -22,3 +22,12 @@ nominal energy. Regenerated as runs/phase4-ensemble-v2 (same members/seed);
 corrected minima 14.5%/16.1%, all 20 members positive, cap binding. This change
 was made because of a methodology flaw, NOT in response to unfavorable numbers
 (the corrected numbers are marginally lower and are the ones now reported).
+
+## Lineage clarification 2026-08-26 — header rev vs manifest rev
+This freeze's header declares "Frozen at git 41ffc83" while
+evidence/manifest.json records git_revision 609b5b3. That is expected, not a
+discrepancy: the header captured HEAD (41ffc83) at the moment the freeze
+declaration was drafted, before the freeze commit (6e67577) itself existed.
+The bundle was actually generated later, at 609b5b3 (after the d28e584 audit
+correction and the Phase 5 T2 generator), and committed at aacd23c. Canonical
+provenance map: docs/EVIDENCE_INDEX.md.
