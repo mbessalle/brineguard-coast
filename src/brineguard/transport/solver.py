@@ -3,6 +3,31 @@ from __future__ import annotations
 import numpy as np
 
 
+def _current_at_time(config: dict, t_s: float) -> tuple[float, float]:
+    """Evaluate (u, v) at absolute time t_s (seconds) for tidal or steady currents."""
+    cur = config["domain"].get("currents")
+    if cur is not None and cur["type"] == "tidal":
+        period_s = cur["period_h"] * 3600.0
+        phase_s = cur["phase_h"] * 3600.0
+        omega = 2.0 * np.pi / period_s
+        arg = omega * (t_s - phase_s)
+        cos_val = np.cos(arg)
+        return (cur["u_mean_m_s"] + cur["u_amp_m_s"] * cos_val,
+                cur["v_mean_m_s"] + cur["v_amp_m_s"] * cos_val)
+    u, v = config["domain"]["velocity_m_s"]
+    return u, v
+
+
+def _peak_velocity(config: dict, horizon_hours: int) -> tuple[float, float]:
+    """Peak |u|,|v| over the simulated window for stability pre-check."""
+    cur = config["domain"].get("currents")
+    if cur is not None and cur["type"] == "tidal":
+        return (abs(cur["u_mean_m_s"]) + abs(cur["u_amp_m_s"]),
+                abs(cur["v_mean_m_s"]) + abs(cur["v_amp_m_s"]))
+    u, v = config["domain"]["velocity_m_s"]
+    return abs(u), abs(v)
+
+
 def advance(concentration: np.ndarray, wet: np.ndarray, *, dx: float, dy: float, depth: float,
             u: float, v: float, dispersion: float, dt: float) -> np.ndarray:
     """One conservative finite-volume step with no-flux land/domain boundaries.
@@ -62,13 +87,26 @@ def simulate(config: dict, loads_kg_s: np.ndarray, *, initial: np.ndarray | None
     sources = source_cells(config)
     rec = np.zeros((hours, len(receptors)))
     fields = np.zeros((hours, *wet.shape)) if record_full else None
+    cur = dcfg.get("currents")
+    t0_s = (cur["t0_h"] * 3600.0) if cur is not None and cur["type"] == "tidal" else 0.0
+    peak_u, peak_v = _peak_velocity(config, hours)
+    peak_dx = dcfg["dispersion_m2_s"] - 0.5 * peak_u * dcfg["dx_m"]
+    if peak_dx < 0:
+        raise ValueError(
+            "Anti-diffusion correction would produce a negative dispersion coefficient "
+            "for the peak velocity over the simulated window: "
+            f"|u|={peak_u:.3f} m/s exceeds the stability cap on the {dcfg['dx_m']:.0f} m grid"
+        )
+    dt_s = dcfg["transport_dt_s"]
+    elapsed = 0.0
     for hour in range(hours):
         for _ in range(steps):
             for source in range(n_sources):
-                c[sources[source]] += loads_kg_s[hour, source] * dcfg["transport_dt_s"] / cell_volume
+                c[sources[source]] += loads_kg_s[hour, source] * dt_s / cell_volume
+            ut, vt = _current_at_time(config, t0_s + elapsed)
             c = advance(c, wet, dx=dcfg["dx_m"], dy=dcfg["dy_m"], depth=dcfg["depth_m"],
-                        u=dcfg["velocity_m_s"][0], v=dcfg["velocity_m_s"][1],
-                        dispersion=dcfg["dispersion_m2_s"], dt=dcfg["transport_dt_s"])
+                        u=ut, v=vt, dispersion=dcfg["dispersion_m2_s"], dt=dt_s)
+            elapsed += dt_s
         rec[hour] = [c[cell] for cell in receptors]
         if fields is not None:
             fields[hour] = c

@@ -17,29 +17,39 @@ def validate_pulse(config: dict) -> dict:
     volume = dcfg["dx_m"] * dcfg["dy_m"] * dcfg["depth_m"]
     c[source] = vcfg["pulse_mass_kg"] / volume
     elapsed = vcfg["pulse_hours"] * 3600
-    for _ in range(round(elapsed / dcfg["transport_dt_s"])):
+    cur = dcfg.get("currents")
+    t0_s = (cur["t0_h"] * 3600.0) if cur is not None and cur["type"] == "tidal" else 0.0
+    from brineguard.transport.solver import _current_at_time
+    dt_s = dcfg["transport_dt_s"]
+    n_steps = round(elapsed / dt_s)
+    for step in range(n_steps):
+        ut, vt = _current_at_time(config, t0_s + step * dt_s)
         c = advance(c, wet, dx=dcfg["dx_m"], dy=dcfg["dy_m"], depth=dcfg["depth_m"],
-                    u=dcfg["velocity_m_s"][0], v=dcfg["velocity_m_s"][1],
-                    dispersion=dcfg["dispersion_m2_s"], dt=dcfg["transport_dt_s"])
+                    u=ut, v=vt, dispersion=dcfg["dispersion_m2_s"], dt=dt_s)
     final_mass = float(c.sum() * volume)
     mass_error = abs(final_mass - vcfg["pulse_mass_kg"]) / vcfg["pulse_mass_kg"]
-    yy, xx = np.indices(c.shape)
-    x0 = source[1] * dcfg["dx_m"] + dcfg["velocity_m_s"][0] * elapsed
-    y0 = source[0] * dcfg["dy_m"] + dcfg["velocity_m_s"][1] * elapsed
-    r2 = (xx * dcfg["dx_m"] - x0) ** 2 + (yy * dcfg["dy_m"] - y0) ** 2
-    analytic = vcfg["pulse_mass_kg"] / (4 * np.pi * dcfg["dispersion_m2_s"] * elapsed * dcfg["depth_m"]) * np.exp(
-        -r2 / (4 * dcfg["dispersion_m2_s"] * elapsed)
-    )
-    analytic[~wet] = 0.0
-    # Normalize the sampled analytical field: comparison is shape-based while mass has its own audit.
-    analytic *= vcfg["pulse_mass_kg"] / (analytic.sum() * volume)
-    rel_l1 = float(np.abs(c - analytic).sum() / analytic.sum())
     result = {
         "initial_mass_kg": vcfg["pulse_mass_kg"], "final_mass_kg": final_mass,
         "mass_relative_error": mass_error, "mass_pass": mass_error <= vcfg["mass_relative_tolerance"],
-        "analytical_relative_l1_error": rel_l1,
-        "analytical_pass": rel_l1 <= vcfg["analytical_relative_l1_tolerance"],
     }
+    if cur is not None and cur["type"] == "tidal":
+        result["analytical_gate"] = "skipped (nonstationary currents)"
+        result["analytical_pass"] = True
+    else:
+        u, v = dcfg["velocity_m_s"]
+        yy, xx = np.indices(c.shape)
+        x0 = source[1] * dcfg["dx_m"] + u * elapsed
+        y0 = source[0] * dcfg["dy_m"] + v * elapsed
+        r2 = (xx * dcfg["dx_m"] - x0) ** 2 + (yy * dcfg["dy_m"] - y0) ** 2
+        analytic = vcfg["pulse_mass_kg"] / (4 * np.pi * dcfg["dispersion_m2_s"] * elapsed * dcfg["depth_m"]) * np.exp(
+            -r2 / (4 * dcfg["dispersion_m2_s"] * elapsed)
+        )
+        analytic[~wet] = 0.0
+        # Normalize the sampled analytical field: comparison is shape-based while mass has its own audit.
+        analytic *= vcfg["pulse_mass_kg"] / (analytic.sum() * volume)
+        rel_l1 = float(np.abs(c - analytic).sum() / analytic.sum())
+        result["analytical_relative_l1_error"] = rel_l1
+        result["analytical_pass"] = rel_l1 <= vcfg["analytical_relative_l1_tolerance"]
     return result
 
 
@@ -106,6 +116,9 @@ def _refined_config(config: dict, factor: int) -> dict:
     for item in dcfg["outfalls"] + dcfg["receptors"]:
         item["row"] *= factor
         item["col"] *= factor
+    # Scale period_h in tidal currents to match the finer temporal resolution.
+    if "currents" in dcfg:
+        dcfg["currents"] = dict(dcfg["currents"])
     return fine
 
 

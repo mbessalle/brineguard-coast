@@ -42,6 +42,22 @@ def load_config(path: str | Path) -> dict:
                     )
     if "ramp_weight" not in config["dispatch"]:
         raise ValueError("dispatch.ramp_weight is required")
+    if "currents" in config["domain"]:
+        cur = config["domain"]["currents"]
+        if cur["type"] not in {"steady", "tidal"}:
+            raise ValueError(f"domain.currents.type must be steady or tidal, got {cur['type']}")
+        for field in ("u_mean_m_s", "v_mean_m_s"):
+            if not isinstance(cur.get(field), (int, float)):
+                raise ValueError(f"domain.currents.{field} must be numeric")
+        if cur["type"] == "tidal":
+            for field in ("u_amp_m_s", "v_amp_m_s"):
+                if not isinstance(cur.get(field), (int, float)):
+                    raise ValueError(f"domain.currents.{field} must be numeric")
+            if not isinstance(cur.get("period_h"), (int, float)) or cur["period_h"] <= 0:
+                raise ValueError(f"domain.currents.period_h must be > 0, got {cur.get('period_h')}")
+            cur.setdefault("period_h", 12.42)
+            cur.setdefault("phase_h", 0.0)
+            cur.setdefault("t0_h", 0.0)
     if "rolling" in config:
         r = config["rolling"]
         enact = r.get("enact_hours")

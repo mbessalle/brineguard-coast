@@ -10,7 +10,7 @@ import numpy as np
 from brineguard.domain import generate_domain, receptor_cells, source_cells
 
 # Bump when the kernel algorithm changes so stale cache entries can never be reused.
-KERNEL_VERSION = "gaussian-puff-image-v1"
+KERNEL_VERSION = "gaussian-puff-image-v2"
 
 
 def _coast_face_x(wet_row: np.ndarray, dx: float) -> float:
@@ -43,24 +43,44 @@ def build_kernel(config: dict) -> np.ndarray:
     dispersion = dcfg["dispersion_m2_s"]
     dt = dcfg["transport_dt_s"]
     steps = round(3600 / dt)
-    u, v = dcfg["velocity_m_s"]
     wet = generate_domain(config)["wet"].values
     sources = source_cells(config)
     receptors = receptor_cells(config)
+    cur = dcfg.get("currents")
+    if cur is not None and cur["type"] == "tidal":
+        u_mean, v_mean = cur["u_mean_m_s"], cur["v_mean_m_s"]
+        u_amp, v_amp = cur["u_amp_m_s"], cur["v_amp_m_s"]
+        period_s = cur["period_h"] * 3600.0
+        phase_s = cur["phase_h"] * 3600.0
+        t0_s = cur["t0_h"] * 3600.0
+        omega = 2.0 * np.pi / period_s
 
-    def _displacement(ages_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        return u * ages_s, v * ages_s
+        def _tidal_integral(mean: float, amp: float, ages_s: np.ndarray, t_r: float) -> np.ndarray:
+            arg0 = omega * (t_r - phase_s)
+            arg1 = omega * (t_r + ages_s - phase_s)
+            return mean * ages_s + amp / omega * (np.sin(arg1) - np.sin(arg0))
+
+        def _displacement(ages_s: np.ndarray, release_s: float) -> tuple[np.ndarray, np.ndarray]:
+            return _tidal_integral(u_mean, u_amp, ages_s, release_s), \
+                   _tidal_integral(v_mean, v_amp, ages_s, release_s)
+    else:
+        u, v = dcfg["velocity_m_s"]
+
+        def _displacement(ages_s: np.ndarray, release_s: float) -> tuple[np.ndarray, np.ndarray]:
+            return u * ages_s, v * ages_s
 
     kernel = np.zeros((len(receptors), len(sources), hours, hours))
     puff_mass = 1.0 * dt
     for s, (srow, scol) in enumerate(sources):
         xs, ys = scol * dx, srow * dy
         x_img = 2.0 * _coast_face_x(wet[srow], dx) - xs
+        _t0_s = t0_s if cur is not None and cur["type"] == "tidal" else 0.0
         for release in range(hours):
+            release_s = _t0_s + release * 3600.0
             for arrival in range(release, hours):
                 lag = arrival - release
                 ages = (lag * steps + np.arange(1, steps + 1)) * dt
-                shift_x, shift_y = _displacement(ages)
+                shift_x, shift_y = _displacement(ages, release_s)
                 denom = 4.0 * dispersion * ages
                 for r, (rrow, rcol) in enumerate(receptors):
                     xr, yr = rcol * dx, rrow * dy
@@ -80,6 +100,7 @@ def kernel_cache_key(config: dict) -> str:
     deliberately excluded so changing them reuses the cached kernel.
     """
     dcfg = config["domain"]
+    cur = dcfg.get("currents")
     payload = {
         "version": KERNEL_VERSION,
         "grid": [dcfg["ny"], dcfg["nx"], dcfg["dx_m"], dcfg["dy_m"]],
@@ -91,6 +112,14 @@ def kernel_cache_key(config: dict) -> str:
         "sources": source_cells(config),
         "receptors": receptor_cells(config),
         "horizon_hours": config["dispatch"]["horizon_hours"],
+        "currents": {
+            "type": cur["type"],
+            "u_mean_m_s": cur["u_mean_m_s"], "v_mean_m_s": cur["v_mean_m_s"],
+            "u_amp_m_s": cur.get("u_amp_m_s", 0.0), "v_amp_m_s": cur.get("v_amp_m_s", 0.0),
+            "period_h": cur.get("period_h", 12.42),
+            "phase_h": cur.get("phase_h", 0.0),
+            "t0_h": cur.get("t0_h", 0.0),
+        } if cur is not None else None,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 

@@ -1,0 +1,73 @@
+# Phase 3 tidal benchmark — non-stationary (tidal) currents variant.
+#
+# Design constraint: peak |u| = u_mean + u_amp = 0.03 + 0.04 = 0.07 m/s
+# stays below the FD cross-check stability cap 2D/dx = 2 * 20 / 500 = 0.08 m/s
+# on the 500 m grid, so the anti-diffusion correction remains valid at all
+# times throughout the tidal cycle.
+
+run:
+  id: phase3-tidal
+  seed: 20260825
+  output_root: runs
+  kernel_cache_dir: data/cache/kernels
+domain:
+  ny: 40
+  nx: 60
+  dx_m: 500.0
+  dy_m: 500.0
+  depth_m: 10.0
+  coast_width_m: 2500.0
+  coast_amplitude_m: 750.0
+  coast_wavelength_m: 3500.0
+  depth_slope_per_m: 0.00006
+  velocity_m_s: [0.04, 0.0]
+  dispersion_m2_s: 20.0
+  transport_dt_s: 300.0
+  currents:
+    type: tidal
+    u_mean_m_s: 0.03
+    v_mean_m_s: 0.0
+    u_amp_m_s: 0.04
+    v_amp_m_s: 0.0
+    period_h: 12.42
+    phase_h: 0.0
+    t0_h: 0.0
+  outfalls:
+    - {name: north, row: 10, col: 12}
+    - {name: central, row: 20, col: 12}
+    - {name: south, row: 30, col: 12}
+  receptors:
+    - {name: near_north, row: 10, col: 16, area_m2: 250000.0, threshold_kg_m3: 0.000002}
+    - {name: near_central, row: 20, col: 16, area_m2: 250000.0, threshold_kg_m3: 0.000002}
+    - {name: downstream, row: 20, col: 28, area_m2: 500000.0, threshold_kg_m3: 0.000001}
+    - {name: cross_shore, row: 26, col: 20, area_m2: 350000.0, threshold_kg_m3: 0.000001}
+dispatch:
+  horizon_hours: 48
+  demand_m3_h: [260,250,240,235,235,245,270,300,320,330,335,340,345,345,340,335,330,325,320,310,300,290,280,270,
+    260,250,240,235,235,245,270,300,320,330,335,340,345,345,340,335,330,325,320,310,300,290,280,270,
+    260,250,240,235,235,245,270,300,320,330,335,340,345,345,340,335,330,325,320,310,300,290,280,270,
+    260,250,240,235,235,245,270,300,320,330,335,340,345,345,340,335,330,325,320,310,300,290,280,270]
+  tariff: [0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58,
+    0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58,
+    0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58,
+    0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58]
+  plants:
+    - {name: north, min_m3_h: 40, max_m3_h: 140, recovery: 0.45, brine_salinity_anomaly_kg_m3: 25.0, energy_kwh_m3: 3.2,
+       ramp_m3_h_per_h: 30, initial_m3_h: 93, local_receptors: [near_north]}
+    - {name: central, min_m3_h: 50, max_m3_h: 160, recovery: 0.46, brine_salinity_anomaly_kg_m3: 24.0, energy_kwh_m3: 3.0,
+       ramp_m3_h_per_h: 30, initial_m3_h: 106, local_receptors: [near_central, downstream]}
+    - {name: south, min_m3_h: 40, max_m3_h: 150, recovery: 0.44, brine_salinity_anomaly_kg_m3: 26.0, energy_kwh_m3: 3.1,
+       ramp_m3_h_per_h: 30, initial_m3_h: 99, local_receptors: [cross_shore]}
+  tank: {initial_m3: 1000, minimum_m3: 300, capacity_m3: 1800, terminal_m3: 1000}
+  exposure_weight: 150000000.0
+  ramp_weight: 0.05
+validation:
+  pulse_mass_kg: 1000.0
+  pulse_hours: 6
+  mass_relative_tolerance: 0.000001
+  analytical_relative_l1_tolerance: 0.10
+  linearity_absolute_tolerance_kg_m3: 1.0e-15
+  boundary_mass_relative_tolerance: 1.0e-12
+  refinement_weighted_dose_relative_tolerance: 0.05
+  kernel_agreement_relative_tolerance: 0.08
+  kernel_agreement_threshold_fraction: 0.5
