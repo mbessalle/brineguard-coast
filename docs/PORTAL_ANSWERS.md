@@ -45,16 +45,22 @@ production)
 
 ## Section 3 — Technical Questions (in progress)
 
-**3.1 Core principle** ✔ FINAL (1457/2200, Sol-reviewed, agreed):
-> Brine salinity in seawater behaves as a passive tracer, so its transport is linear. Double a discharge and its modeled plume doubles. Add two discharges and their modeled plumes add.
+**3.1 Core principle** ✔ FINAL v2 (2142/2200; v1 was Sol-agreed, v2 incorporates
+an external density-physics review the user obtained: passive-tracer claim now
+conditioned on far-field + small-anomaly + prescribed currents; dense-jet
+non-resolution stated; LP qualified with continuous-turndown/no-binaries fact
+verified in src/brineguard/dispatch/model.py; verification-vs-validation
+distinction made explicit with density-aware validation named as pathway step;
+Red Sea claim scoped to "in our experiments"):
+> Beyond the near-field mixing zone, and where salinity anomalies are small enough that their feedback on coastal circulation can be neglected, excess salinity can be approximated as a passive tracer carried by a prescribed current field. Under that approximation its transport is linear: doubling a discharge doubles the modeled anomaly, and anomalies from multiple discharges add. The dense near-field jet is not resolved. The model works with the diluted far-field anomaly.
 >
-> This linearity lets us compute the coast's response once and reuse it. For each outfall and each hour of release, we precompute the salinity arriving at every protected site. This response table is the kernel. It uses closed-form Gaussian solutions, with the shoreline and tidal currents treated analytically.
+> This linearity lets us compute the coast's response once and reuse it. For each outfall and each hour of release, we precompute the salinity anomaly arriving at every protected site. This response table is the kernel. It uses closed-form Gaussian solutions, with an idealized reflecting shoreline and prescribed tidal currents treated analytically.
 >
-> Brine release is fixed by water production through the recovery ratio. Choosing production schedules therefore determines exposure, which is a linear function of those schedules. The problem becomes a linear program. It must meet water demand and respect tank levels, turndown ranges, and ramp rates while minimizing energy cost plus exposure. The solver finds a global optimum in seconds.
+> Brine release is fixed by water production through the recovery ratio. Choosing production schedules therefore determines exposure, which is a linear function of those schedules. The problem becomes a linear program: meet water demand and respect tank levels, turndown ranges, and ramp rates while minimizing energy cost plus exposure. Plants operate continuously within their turndown ranges, so no on-off decisions are needed and the program stays linear. The solver finds the global optimum of that program, in seconds at our benchmark scale.
 >
-> We verify the result with a separate finite-difference solver that simulates the same physics using a different numerical method. The two models must agree, mass balance must close, and every schedule is scored by re-simulation with the finite-difference solver rather than by the optimizer that produced it.
+> We check the implementation with a separate finite-difference solver that simulates the same equations by a different numerical method. The two models must agree, mass balance must close, and every schedule is scored by re-simulation rather than by the optimizer that produced it. This verifies the code, not the physics. Validating the passive-tracer approximation itself against a density-aware hydrodynamic model and field data is the first step of our pathway from proof of concept to pilot.
 >
-> The kernel also provides a site screening test. Coordination only pays where plants differ in dose per cubic meter produced and have room to shift production. Both conditions can be computed before deployment, and the prediction held on real Red Sea bathymetry.
+> The kernel also yields a screening test. Coordination pays only where plants differ in dose per cubic meter produced and have room to shift production. Both conditions are computable before deployment, and in our experiments the prediction held on real Red Sea bathymetry.
 
 **Sol review recipe (fast, ~20s):** `pi --provider openai-codex --model gpt-5.6-sol --thinking low --no-extensions -p --no-session --no-tools "<prompt>"` (allowlisted, no permission wall).
 
