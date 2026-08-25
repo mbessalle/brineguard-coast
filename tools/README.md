@@ -121,3 +121,4 @@ python3 tools/fetch_cmems.py --dataset-id <ID> --bbox 26 29 34 37 --start 2024-0
 Find Red Sea product IDs at https://data.marine.copernicus.eu (filter by region =
 "Red Sea", variable = "sea_water_velocity"). On success saves under
 `data/registry/cmems/` with a provenance JSON sidecar.
+- agent_io_log.sh — register every agent call (prompt/stdout/meta) to the agent-io branch for debugging
