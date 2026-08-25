@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/tools/session_brief.sh\" 2>/dev/null || true",
+            "timeout": 45,
+            "statusMessage": "Gathering session brief (git, memory, presences)"
+          }
+        ]
+      }
+    ]
+  }
+}

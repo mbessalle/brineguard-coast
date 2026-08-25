@@ -1,0 +1,160 @@
+# SSSF (Super Simple Software Factory) configuration for BrineGuard Coast.
+#
+# Establishes a tiered model stack and routing policy so that AI Developer
+# Workflows (ADWs) route each phase to the cheapest reliable actor:
+# deterministic code > Tier 2 workhorse agents > Tier 1 SOTA agents.
+#
+# Read by adws/adw_scout.py, adws/adw_plan_build_test.py, and
+# adws/adw_simple_sdlc.py. Edit this file (not the scripts) to change which
+# model backs a given role.
+
+version: 1
+
+tiers:
+  tier_1_sota:
+    description: >
+      High-depth reasoning: architecture planning, breaking down complex
+      requirements, final semantic verification of a diff against a plan.
+      Reserved for phases where getting the structure wrong is expensive to
+      undo. This tier is the orchestrating session itself (invoked headless
+      via the `claude` CLI for sub-phases that need a fresh context window).
+    model: claude-fable-5
+    roles:
+      - planner
+      - reviewer
+
+  tier_2_workhorse:
+    description: >
+      Code generation against a strict plan, file edits, code search/recon,
+      diff summarization, documentation writing. Cheaper and faster than
+      Tier 1; used for anything that follows an already-decided plan rather
+      than making structural decisions.
+    models:
+      builder: claude-sonnet-5
+      documenter: claude-sonnet-5
+      scout: claude-haiku-4-5-20251001
+    roles:
+      - builder
+      - scout
+      - documenter
+
+  tier_3_deterministic:
+    description: >
+      Zero-token local code execution. All quality gates, tests, and
+      artifact/schema validation run here, never via an LLM call. See
+      adws/gates.py.
+    engine: local
+    cost_tokens: 0
+    roles:
+      - quality_gate
+      - test_runner
+      - artifact_verifier
+      - schema_verifier
+
+# ---------------------------------------------------------------------------
+# Routing policy
+# ---------------------------------------------------------------------------
+routing:
+  default_tier_by_role:
+    planner: tier_1_sota
+    reviewer: tier_1_sota
+    builder: tier_2_workhorse
+    scout: tier_2_workhorse
+    documenter: tier_2_workhorse
+    quality_gate: tier_3_deterministic
+    test_runner: tier_3_deterministic
+    artifact_verifier: tier_3_deterministic
+    schema_verifier: tier_3_deterministic
+
+  # Always try deterministic code before spending a single token verifying
+  # syntax, formats, or basic execution.
+  code_over_llm: true
+
+  retry_policy:
+    # Bounded retry: on a gate failure, hand the exact stderr/stdout back to
+    # the Tier 2 builder for a fix attempt. Do not re-plan on every failure.
+    max_builder_retries: 3
+    retry_actor: builder
+    retry_input: gate_failure_output   # raw stdout/stderr only, not a summary
+    # Escalate to the Tier 1 planner only when retries are exhausted, or the
+    # gate failure indicates a structural problem (see escalation_triggers).
+    escalate_to: planner
+    escalate_after_retries_exhausted: true
+    escalation_triggers:
+      - retries_exhausted
+      - plan_contradicted_by_diff
+      - repeated_identical_failure   # same gate fails the same way twice
+
+# ---------------------------------------------------------------------------
+# Context handoff convention
+# ---------------------------------------------------------------------------
+# Phases communicate via filesystem envelopes instead of passing raw
+# conversation history between agent invocations. Every ADW session writes
+# here, keyed by a session id (timestamp + short uuid, e.g.
+# 20260825_062652_4ca60af3).
+handoff:
+  session_root: adw_data/sessions
+  handoff_subdir: context_handoff
+  # Resolved path for session <session_id>:
+  #   adw_data/sessions/<session_id>/context_handoff/
+  envelopes:
+    planner:
+      outputs: [plan.md, plan.json]
+      plan_json_keys: [status, summary, changed_files]
+    builder:
+      consumes: [plan.md]
+      outputs: [envelope.json]
+      envelope_json_keys: [status, summary, changed_files]
+    tester:
+      outputs: [test_log.txt, gate_results.json]
+    reviewer:
+      consumes: [plan.md]
+      diffs_against: plan.md
+      outputs: [review.md, review.json]
+    documenter:
+      outputs: [docs_envelope.json]
+
+# ---------------------------------------------------------------------------
+# Workflows (see adws/README.md for details)
+# ---------------------------------------------------------------------------
+workflows:
+  adw_scout:
+    description: Fast, read-only recon on codebase/architecture.
+    phases:
+      - {role: scout, tier: tier_2_workhorse, mutates: false}
+
+  adw_plan_build_test:
+    description: Planner -> Builder -> Test/Gate -> commit.
+    phases:
+      - {role: planner, tier: tier_1_sota}
+      - {role: builder, tier: tier_2_workhorse}
+      - {role: quality_gate, tier: tier_3_deterministic}
+      - {role: git_commit, tier: tier_3_deterministic}
+
+  adw_simple_sdlc:
+    description: >
+      Request -> Plan (SOTA) -> Build (Workhorse) -> Test (Deterministic) ->
+      Review (SOTA) -> Document (Workhorse) -> Commit (Deterministic).
+    phases:
+      - {role: planner, tier: tier_1_sota}
+      - {role: builder, tier: tier_2_workhorse}
+      - {role: quality_gate, tier: tier_3_deterministic}
+      - {role: reviewer, tier: tier_1_sota}
+      - {role: documenter, tier: tier_2_workhorse}
+      - {role: git_commit, tier: tier_3_deterministic}
+
+# ---------------------------------------------------------------------------
+# Deterministic gates (adws/gates.py)
+# ---------------------------------------------------------------------------
+gates:
+  python: .venv/bin/python
+  checks:
+    - name: pytest
+      required: true
+      command: [pytest]
+    - name: ruff
+      required: false   # skipped gracefully with a note if not installed
+      command: [-m, ruff, check, .]
+    - name: mypy
+      required: false   # skipped gracefully with a note if not installed
+      command: [-m, mypy, src]

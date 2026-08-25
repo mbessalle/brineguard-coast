@@ -33,3 +33,30 @@ GEMINI_API_KEY=$(cat .env.gemini_key) python3 tools/gemini_flash.py "your prompt
 
 `.env.gemini_key` (gitignored) holds the raw Gemini API key, one line, no quotes.
 Never commit it or print it to a shared/logged terminal.
+
+## openrouter_call.py
+
+OpenRouter access for SSSF Workhorse roles. Key from `OPENROUTER_API_KEY` or gitignored
+`.env` (`OPENROUTER_API_KEY=...`); never printed.
+
+```bash
+python3 tools/openrouter_call.py models deepseek kimi     # live catalog + pricing
+python3 tools/openrouter_call.py chat -m deepseek/deepseek-v4-pro "prompt" [-o out.md]
+```
+
+## probe.py
+
+Uniform backend prober — one sentinel prompt through every model route (claude, codex,
+pi×openrouter, pi×google, openrouter direct, gemini). Backends are template-table rows:
+adding/altering a route is a one-line edit, not new code. Exit 0 = all pass.
+
+```bash
+python3 tools/probe.py                                    # probe everything
+python3 tools/probe.py pi --model moonshotai/kimi-k3      # one route, model override
+```
+
+## session_brief.sh
+
+Deterministic session-start orientation (git state, memory index, docs, agent CLI +
+Orca presences, standing orders). Run automatically by the SessionStart hook in
+`.claude/settings.json`; callable manually any time.
