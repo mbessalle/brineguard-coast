@@ -1,0 +1,98 @@
+# ---------------------------------------------------------------------------
+# Phase 5 T1 — representative Red Sea plant scale (ASSUMED, not measured).
+#
+# Copy of hybrid_redsea.yaml with assumed industrial-scale plant capacities
+# in the 100 k–300 k m³/day class.  Every plant parameter is explicitly
+# labelled as an assumption — no public operational data is implied.
+#
+# ASSUMED plant scales (m³/h, ~×56 the Phase 4 toy plants):
+#   • north   – ~120 k m³/day  → max_m3_h = 5 000,  min ≈ 40 %
+#   • central – ~216 k m³/day  → max_m3_h = 9 000,  min ≈ 40 %
+#   • south   – ~168 k m³/day  → max_m3_h = 7 000,  min ≈ 40 %
+#
+# Demand (96 h, 4 repetitions of the original daily shape) is scaled so that
+# the average equals ~80 % of aggregate max capacity, giving the A-strategy
+# headroom.  Tank, energy, recovery, and brine-salinity ranges are chosen
+# within the Red Sea desalination literature envelope; all are assumptions.
+# Receptors and thresholds are unchanged from hybrid_redsea.yaml.
+# ---------------------------------------------------------------------------
+run:
+  id: hybrid-redsea-full
+  seed: 20260825
+  output_root: runs
+  kernel_cache_dir: data/cache/kernels
+domain:
+  source: gebco
+  gebco_path: data/registry/gebco/gebco_lat26_29_lon34_37.nc
+  bbox: [27.40, 27.58, 35.32, 35.624]
+  ny: 40
+  nx: 60
+  dx_m: 500.0
+  dy_m: 500.0
+  # Uniform scalar depth: clipped median of GEBCO bathymetry; true median in
+  # the dataset attrs (build_hybrid_domain registers depth_true_median_m=369).
+  depth_m: 30.0
+  # Synthetic-coast params are unused by the hybrid path (included so the
+  # config still parses and kernel_cache_key operates without special-casing).
+  coast_width_m: 2500.0
+  coast_amplitude_m: 750.0
+  coast_wavelength_m: 3500.0
+  depth_slope_per_m: 0.00006
+  velocity_m_s: [0.04, 0.0]
+  dispersion_m2_s: 20.0
+  transport_dt_s: 300.0
+  currents:
+    type: tidal
+    u_mean_m_s: 0.03
+    v_mean_m_s: 0.0
+    u_amp_m_s: 0.04
+    v_amp_m_s: 0.0
+    period_h: 12.42
+    phase_h: 0.0
+    t0_h: 0.0
+  outfalls:
+    - {name: north,   row: 35, col: 33}
+    - {name: central, row: 18, col: 39}
+    - {name: south,   row: 6,  col: 47}
+  receptors:
+    - {name: near_north,   row: 35, col: 27, area_m2: 250000.0, threshold_kg_m3: 0.000002}
+    - {name: near_central, row: 18, col: 33, area_m2: 250000.0, threshold_kg_m3: 0.000002}
+    - {name: downstream,   row: 18, col: 15, area_m2: 500000.0, threshold_kg_m3: 0.000001}
+    - {name: cross_shore,  row: 6,  col: 41, area_m2: 350000.0, threshold_kg_m3: 0.000001}
+dispatch:
+  horizon_hours: 48
+  # 96 h demand — 4 repetitions of the original daily shape, scaled so
+  # average ≈ 80 % of aggregate max capacity (21 000 m³/h).
+  demand_m3_h: [14662,14098,13534,13252,13252,13816,15226,16917,18045,18609,18891,19173,19455,19455,19173,18891,18609,18327,18045,17481,16917,16354,15790,15226,
+    14662,14098,13534,13252,13252,13816,15226,16917,18045,18609,18891,19173,19455,19455,19173,18891,18609,18327,18045,17481,16917,16354,15790,15226,
+    14662,14098,13534,13252,13252,13816,15226,16917,18045,18609,18891,19173,19455,19455,19173,18891,18609,18327,18045,17481,16917,16354,15790,15226,
+    14662,14098,13534,13252,13252,13816,15226,16917,18045,18609,18891,19173,19455,19455,19173,18891,18609,18327,18045,17481,16917,16354,15790,15226]
+  tariff: [0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58,
+    0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58,
+    0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58,
+    0.55,0.50,0.47,0.45,0.45,0.48,0.65,0.82,0.90,0.92,0.88,0.82,0.75,0.70,0.68,0.72,0.85,0.95,1.00,0.92,0.78,0.68,0.62,0.58]
+  plants:
+    # ── northern plant: ASSUMED ~120 k m³/day capacity ──
+    - {name: north, min_m3_h: 2000, max_m3_h: 5000, recovery: 0.43, brine_salinity_anomaly_kg_m3: 25.0, energy_kwh_m3: 3.4,
+       ramp_m3_h_per_h: 600, initial_m3_h: 3500, local_receptors: [near_north]}
+    # ── central plant: ASSUMED ~216 k m³/day capacity ──
+    - {name: central, min_m3_h: 3600, max_m3_h: 9000, recovery: 0.44, brine_salinity_anomaly_kg_m3: 24.0, energy_kwh_m3: 3.2,
+       ramp_m3_h_per_h: 1100, initial_m3_h: 6300, local_receptors: [near_central, downstream]}
+    # ── southern plant: ASSUMED ~168 k m³/day capacity ──
+    - {name: south, min_m3_h: 2800, max_m3_h: 7000, recovery: 0.42, brine_salinity_anomaly_kg_m3: 26.0, energy_kwh_m3: 3.5,
+       ramp_m3_h_per_h: 850, initial_m3_h: 4900, local_receptors: [cross_shore]}
+  # Tank scaled proportionally to demand (~×56 the toy-plant tank);
+  # selected so A-strategy storage stays within bounds.
+  tank: {initial_m3: 56392, minimum_m3: 16917, capacity_m3: 101505, terminal_m3: 56392}
+  exposure_weight: 150000000.0
+  ramp_weight: 0.05
+validation:
+  pulse_mass_kg: 1000.0
+  pulse_hours: 6
+  mass_relative_tolerance: 0.000001
+  analytical_relative_l1_tolerance: 0.10
+  linearity_absolute_tolerance_kg_m3: 1.0e-15
+  boundary_mass_relative_tolerance: 1.0e-12
+  refinement_weighted_dose_relative_tolerance: 0.05
+  kernel_agreement_relative_tolerance: 0.08
+  kernel_agreement_threshold_fraction: 0.5
