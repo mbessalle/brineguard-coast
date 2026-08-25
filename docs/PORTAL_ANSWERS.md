@@ -4,7 +4,7 @@ Answers are claims-bounded (docs/CLAIMS.md) and character-counted with a
 safety margin. Status: ☐ pending user paste of section, ☑ drafted, ✔ entered
 in portal. Copy verbatim; do not improvise past the wording.
 
-## Section 2 — Innovation Overview ☑ drafted 2026-08-26
+## Section 2 — Innovation Overview ✔ ENTERED in portal 2026-08-26 (draft saved; 2.6=Other/'Ennomotive open-innovation platform')
 
 **2.1 Innovation / Project Name** (75/150):
 > BrineGuard Coast — coordinated desalination dispatch for coastal protection
@@ -41,3 +41,21 @@ milestones — see audit gap 28)
 
 ## Section 6 — Supporting Materials ☐ (deck PDF, video, evidence ZIP — in
 production)
+
+
+## Section 3 — Technical Questions (in progress)
+
+**3.1 Core principle** ✔ FINAL (1457/2200, Sol-reviewed, agreed):
+> Brine salinity in seawater behaves as a passive tracer, so its transport is linear. Double a discharge and its modeled plume doubles. Add two discharges and their modeled plumes add.
+>
+> This linearity lets us compute the coast's response once and reuse it. For each outfall and each hour of release, we precompute the salinity arriving at every protected site. This response table is the kernel. It uses closed-form Gaussian solutions, with the shoreline and tidal currents treated analytically.
+>
+> Brine release is fixed by water production through the recovery ratio. Choosing production schedules therefore determines exposure, which is a linear function of those schedules. The problem becomes a linear program. It must meet water demand and respect tank levels, turndown ranges, and ramp rates while minimizing energy cost plus exposure. The solver finds a global optimum in seconds.
+>
+> We verify the result with a separate finite-difference solver that simulates the same physics using a different numerical method. The two models must agree, mass balance must close, and every schedule is scored by re-simulation with the finite-difference solver rather than by the optimizer that produced it.
+>
+> The kernel also provides a site screening test. Coordination only pays where plants differ in dose per cubic meter produced and have room to shift production. Both conditions can be computed before deployment, and the prediction held on real Red Sea bathymetry.
+
+**Sol review recipe (fast, ~20s):** `pi --provider openai-codex --model gpt-5.6-sol --thinking low --no-extensions -p --no-session --no-tools "<prompt>"` (allowlisted, no permission wall).
+
+**Operating mode (user-mandated):** user pastes question -> ONE short message back with final text + char count, code-verified, contract style (no em dashes, no semicolons), claims-bounded per docs/CLAIMS.md. Sol review folded into same turn only for technical-risk answers.
