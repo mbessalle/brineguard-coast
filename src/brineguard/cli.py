@@ -4,6 +4,7 @@ from brineguard.experiments.runner import run
 from brineguard.experiments.benchmark import run_benchmark
 from brineguard.experiments.ensemble import run_ensemble
 from brineguard.experiments.sensitivity import run_sensitivity
+from brineguard.experiments.evidence import make_evidence, verify_evidence
 
 
 def main() -> None:
@@ -28,6 +29,8 @@ def main() -> None:
     sens.add_argument("--run-id")
     sens.add_argument("--n-points", type=int, default=8)
     sens.add_argument("--output-root", default="runs")
+    ev = sub.add_parser("make-evidence", help="generate the Phase 5 evidence bundle")
+    ev.add_argument("--verify", action="store_true", help="verify reproducibility after generation")
     args = parser.parse_args()
     if args.command == "run-first-slice":
         path = run(args.config, args.run_id)
@@ -43,6 +46,11 @@ def main() -> None:
         path = run_sensitivity(args.config, args.run_id, n_points=args.n_points,
                                output_root=args.output_root)
         print(path)
+    elif args.command == "make-evidence":
+        bundle_dir, _manifest = make_evidence()
+        print(bundle_dir)
+        if args.verify:
+            verify_evidence(bundle_dir)
 
 
 if __name__ == "__main__":
