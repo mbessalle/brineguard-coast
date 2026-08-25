@@ -72,14 +72,15 @@ backends:
     invoke: [pi, --provider, openrouter, --model, "{model}", -p, --no-session,
              --append-system-prompt, "{role_prompt}", "{prompt}"]
     env: {OPENROUTER_API_KEY: from tools/openrouter_call.py:load_key}
-  openrouter-api: # single-turn only (no tools)
-    invoke: [python3, tools/openrouter_call.py, chat, -m, "{model}", "{prompt}"]
+  openrouter-api: # single-turn only (no tools); empty role_prompt => no system message
+    invoke: [python3, tools/openrouter_call.py, chat, -m, "{model}", -s, "{role_prompt}", "{prompt}"]
 
 routes:
   planner:              {backend: session,        model: claude-fable-5}
   reviewer:             {backend: session,        model: claude-fable-5}
   reviewer_independent: {backend: openrouter-api, model: moonshotai/kimi-k3,
-                         usd_per_m_in: 3.00, usd_per_m_out: 15.00}
+                         usd_per_m_in: 3.00, usd_per_m_out: 15.00,
+                         role_prompt: agent-system-prompt.md}  # SOTA comms contract as system prompt
   builder:              {backend: pi-openrouter,  model: deepseek/deepseek-v4-pro,
                          usd_per_m_in: 0.52, usd_per_m_out: 1.04,
                          role_prompt: adws/prompts/builder.md}   # DEFAULT coder (user-confirmed)

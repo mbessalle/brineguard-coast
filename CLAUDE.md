@@ -1,5 +1,8 @@
 # BrineGuard Coast — project contract
 
+Communication contract for Tier 1 (SOTA) sessions — follow it in every response:
+@agent-system-prompt.md
+
 GPIW 2026 Track A submission, deadline 2026-09-30. **BUILD_PLAN.md is canonical**;
 work proceeds phase-by-phase (§10) with commits as the progress log.
 
