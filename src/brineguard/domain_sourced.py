@@ -195,7 +195,7 @@ def checks(config: dict) -> dict:
     }
 
 
-def build_hybrid_domain(config: dict) -> xr.Dataset:
+def build_hybrid_domain(config: dict, cmems_summary: dict | None = None) -> xr.Dataset:
     """Build a hybrid sourced domain from GEBCO bathymetry + assumed plants.
 
     Contracts
@@ -208,8 +208,38 @@ def build_hybrid_domain(config: dict) -> xr.Dataset:
     * Raises ``ValueError`` if any Phase 4 gate fails, *unless*
       ``config["domain"]["allow_hybrid_fallback"]`` is true, in which case
       it proceeds and stamps ``attrs["checks_failed"]``.
+    * When ``cmems_summary`` is provided (from
+      ``brineguard.transport.cmems_currents.extract_current_summary``),
+      the FD anti-diffusion cap ``|u| < 2D/dx`` is checked as a hard error
+      (never a silent clamp), the config's background current is set from
+      the measured time-mean vector, and the provenance block records the
+      dataset id, sha256, sub-tidal-mean label, and an explicit statement
+      that the tidal component is analytic-assumed (daily-mean data cannot
+      resolve M2).
     """
     dcfg = config["domain"]
+
+    # ---- cmems FD-cap gate (before anything else) ---------------------------
+    if cmems_summary is not None:
+        dx = float(dcfg["dx_m"])
+        D = float(dcfg["dispersion_m2_s"])
+        cap = 2.0 * D / dx  # |u| < 2D/dx
+
+        tidal_amp = 0.0
+        if dcfg.get("currents") and dcfg["currents"].get("type") == "tidal":
+            u_amp = float(dcfg["currents"].get("u_amp_m_s", 0.0))
+            v_amp = float(dcfg["currents"].get("v_amp_m_s", 0.0))
+            tidal_amp = float(np.sqrt(u_amp**2 + v_amp**2))
+
+        total_speed = cmems_summary["mean_speed_m_s"] + tidal_amp
+        if total_speed >= cap:
+            raise ValueError(
+                f"FD anti-diffusion cap exceeded: "
+                f"measured |u|={cmems_summary['mean_speed_m_s']:.4f} m/s + "
+                f"tidal_amp={tidal_amp:.4f} m/s = {total_speed:.4f} m/s "
+                f">= 2D/dx = {cap:.4f} m/s"
+            )
+
     result = checks(config)
     failures = [k for k in ("provenance_pass", "resolution_pass", "geometry_pass") if not result[k]]
     allow_fallback = bool(dcfg.get("allow_hybrid_fallback", False))
@@ -248,6 +278,25 @@ def build_hybrid_domain(config: dict) -> xr.Dataset:
     }
     if failures:
         attrs["checks_failed"] = failures
+
+    # ---- cmems provenance block ----------------------------------------------
+    if cmems_summary is not None:
+        attrs["cmems_currents"] = {
+            "dataset_id": cmems_summary["dataset_id"],
+            "sha256": cmems_summary["provenance_sha256"],
+            "u_mean_m_s": cmems_summary["u_mean_m_s"],
+            "v_mean_m_s": cmems_summary["v_mean_m_s"],
+            "mean_speed_m_s": cmems_summary["mean_speed_m_s"],
+            "tidal_component": "analytic-assumed (daily-mean data cannot resolve M2)",
+        }
+        # Mutate config in-place so the kernel picks up measured currents.
+        dcfg["velocity_m_s"] = [
+            cmems_summary["u_mean_m_s"],
+            cmems_summary["v_mean_m_s"],
+        ]
+        if dcfg.get("currents"):
+            dcfg["currents"]["u_mean_m_s"] = cmems_summary["u_mean_m_s"]
+            dcfg["currents"]["v_mean_m_s"] = cmems_summary["v_mean_m_s"]
 
     ds = xr.Dataset(
         data_vars={
