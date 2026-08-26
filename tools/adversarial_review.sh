@@ -14,7 +14,7 @@ trap 'rm -f "$outf" "$errf"' EXIT
 
 set +e
 timeout "$budget" codex exec --sandbox read-only -m "$MODEL" \
-  -c model_reasoning_effort='"high"' "$(cat "$promptf")" >"$outf" 2>"$errf"
+  -c model_reasoning_effort='"high"' "$(cat "$promptf")" <"/dev/null" >"$outf" 2>"$errf"
 ec=$?
 set -e
 # codex can exit 0 while streaming a structured error (verified live)
