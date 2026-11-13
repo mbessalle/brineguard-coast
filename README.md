@@ -47,6 +47,29 @@ operational deployment).
 - **Negative tests.** The suite includes tests that the checks themselves fail when they should.
 - **A null result is a result.** The real-coastline case is reported as it came out.
 
+## How it was built: a tiered multi-agent workflow
+
+The repository was built by a small software factory, not by one chat session. The setup is in the repo:
+[`sssf.config.yaml`](sssf.config.yaml) (routing), [`adws/`](adws/) (workflows and gates) and
+[`tools/orca_dispatch.py`](tools/orca_dispatch.py) (worker dispatch through Orca).
+
+| Tier | Role | Runs on |
+|---|---|---|
+| 1 | Planner and reviewer | the orchestrating Claude Code session |
+| 1b | Independent reviewer, to avoid self-review | a different frontier model through OpenRouter |
+| 2 | Builder, scout, documenter | workhorse models driven by the Pi agent harness, dispatched and supervised through Orca |
+| 3 | Quality gates, tests, artifact and schema checks | plain code, zero tokens |
+
+What keeps it honest:
+
+- **Code checks, models build.** Every phase hands over a JSON envelope; [`adws/gates.py`](adws/gates.py) verifies that the
+  files exist, the envelope parses, the diff matches what the worker claims it changed, and the test suite passes.
+- **Workers cannot edit what grades them.** The gates, the frozen evidence, the claims document and the config are
+  protected paths; a diff that touches them is rejected.
+- **Bounded retries, then escalation.** A failing gate sends only the error output back to the builder for a
+  limited number of attempts before the planner is involved.
+- **Model-agnostic by design.** Roles map to backends in one config file, so a model is swapped by editing a line.
+
 ## Run it
 
 ```bash
